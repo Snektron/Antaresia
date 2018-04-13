@@ -87,6 +87,12 @@ impl Printer {
                 self.node(1, "Expr");
                 self.expr(expr);
             },
+            Stmt::VarDecl(ref dt, ref name, ref val) => {
+                self.node(if val.is_some() { 1 } else { 0 }, format!("VarDecl(type = {:?}, name = {})", dt, name));
+                if val.is_some() {
+                    self.expr(val.as_ref().unwrap());
+                }
+            },
             Stmt::FuncDecl(ref name, ref rtype, ref params, ref body) => {
                 self.node(1, format!("FuncDecl(name = {}, return type = {:?}, params = {:?})", name, rtype, params));
                 self.stmt(body);

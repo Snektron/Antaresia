@@ -34,6 +34,7 @@ Stmt: Stmt = {
     StructDeclStmt,
     <ShortFnDeclStmt> ";",
     <ReturnStmt> ";",
+    <DeclStmt> ";",
     <Box<Expr>> ";" => Stmt::Expr(<>)
 };
 
@@ -69,6 +70,9 @@ FieldList: Vec<Field> = <t:DataType> <is:List<Ident>>
 StructDeclStmt: Stmt = "struct" <name:Ident> "{" <fields:(<FieldList> ";")+> "}"
     => Stmt::StructDecl(name, fields.into_iter().flat_map(|x| x.into_iter()).collect());
 
+DeclStmt: Stmt = <dt:DataType> <name:Ident>
+    => Stmt::VarDecl(dt, name, None);
+
 Expr = Assignment;
 
 Assignment = Binary<AssignmentKind, Sum>;
@@ -88,11 +92,11 @@ FactorKind: BinOpKind = {
 };
 
 Unary = {
-    <o:UnaryOp> <rhs:Box<Unary>> => Expr::Unary(o, rhs),
+    <o:UnaryKind> <rhs:Box<Unary>> => Expr::Unary(o, rhs),
     PostfixExpr
 };
 
-UnaryOp: UnOpKind = {
+UnaryKind: UnOpKind = {
     "-" => UnOpKind::Neg,
     "~" => UnOpKind::Compl,
     "!" => UnOpKind::Not,

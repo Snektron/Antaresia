@@ -24,6 +24,7 @@ pub enum Stmt {
     While(Box<Expr>, Box<Stmt>),
     Return(Box<Expr>),
     Expr(Box<Expr>),
+    VarDecl(DataType, String, Option<Box<Expr>>),
     FuncDecl(String, DataType, Vec<Field>, Box<Stmt>),
     StructDecl(String, Vec<Field>)
 }
