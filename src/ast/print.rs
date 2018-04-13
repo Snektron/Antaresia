@@ -55,60 +55,74 @@ impl Printer {
     }
 
     pub fn stmt(&mut self, stmt: &Stmt) {
-        match stmt {
-            &Stmt::Compound(ref children) => {
+        match *stmt {
+            Stmt::Compound(ref children) => {
                 self.node(children.len(), format!("Compound(#stmts = {})", children.len()));
 
                 for child in children {
                     self.stmt(child);
                 }
             },
-            &Stmt::If(ref cond, ref cons, None) => {
+            Stmt::If(ref cond, ref cons, None) => {
                 self.node(2, "If");
                 self.expr(cond);
                 self.stmt(cons);
             },
-            &Stmt::If(ref cond, ref cons, Some(ref alt)) => {
+            Stmt::If(ref cond, ref cons, Some(ref alt)) => {
                 self.node(3, "IfElse");
                 self.expr(cond);
                 self.stmt(cons);
                 self.stmt(alt);
             },
-            &Stmt::While(ref cond, ref cons) => {
+            Stmt::While(ref cond, ref cons) => {
                 self.node(2, "While");
                 self.expr(cond);
                 self.stmt(cons);
             },
-            &Stmt::Return(ref expr) => {
+            Stmt::Return(ref expr) => {
                 self.node(1, "Return");
                 self.expr(expr);
             },
-            &Stmt::Expr(ref expr) => {
+            Stmt::Expr(ref expr) => {
                 self.node(1, "Expr");
                 self.expr(expr);
             },
-            &Stmt::FuncDecl(ref name, ref params, ref body) => {
-                self.node(1, format!("FuncDecl(name = {:?}, args = {:?})", name, params));
+            Stmt::FuncDecl(ref name, ref rtype, ref params, ref body) => {
+                self.node(1, format!("FuncDecl(name = {}, return type = {:?}, params = {:?})", name, rtype, params));
                 self.stmt(body);
             },
-            &Stmt::StructDecl(ref name, ref fields) => {
+            Stmt::StructDecl(ref name, ref fields) => {
                 self.node(0, format!("StructDecl(name = {:?}, fields = {:?})", name, fields));
             }
         }        
     }
 
     pub fn expr(&mut self, expr: &Expr) {
-        match expr {
-            &Expr::Binary(ref op, ref lhs, ref rhs) => {
+        match *expr {
+            Expr::Binary(ref op, ref lhs, ref rhs) => {
                 self.node(2, format!("Binary(op = {:?})", op));
-                self.expr(lhs.as_ref());
-                self.expr(rhs.as_ref());
+                self.expr(lhs);
+                self.expr(rhs);
             },
-            &Expr::Unary(ref op, ref lhs) => {
+            Expr::Unary(ref op, ref rhs) => {
                 self.node(1, format!("Unary(op = {:?})", op));
-                self.expr(lhs.as_ref());
+                self.expr(rhs);
             },
-            &Expr::Literal(ref x) => self.node(0, format!("Literal(value = {:?})", x))
+            Expr::Call(ref callee, ref args) => {
+                self.node(args.len() + 1, "Call");
+                self.expr(callee);
+
+                for arg in args {
+                    self.expr(arg);
+                }
+            },
+            Expr::Subscript(ref lhs, ref rhs) => {
+                self.node(2, "Subscript");
+                self.expr(lhs);
+                self.expr(rhs);
+            },
+            Expr::Literal(ref x) => self.node(0, format!("Literal(value = {:?})", x)),
+            Expr::Name(ref name) => self.node(0, format!("Name(name = {})", name)),
         }
     }
 }

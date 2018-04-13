@@ -4,7 +4,8 @@ pub mod print;
 pub enum DataType {
     U8,
     Void,
-    Alias(String)
+    Alias(String),
+    Ptr(Box<DataType>)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -15,17 +16,15 @@ pub enum Literal {
 #[derive(Debug)]
 pub struct Field(pub DataType, pub String);
 
-#[derive(Debug)]
-pub struct Program(pub Vec<Box<Stmt>>);
+pub struct Program(pub Vec<Stmt>);
 
-#[derive(Debug)]
 pub enum Stmt {
-    Compound(Vec<Box<Stmt>>),
+    Compound(Vec<Stmt>),
     If(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
     While(Box<Expr>, Box<Stmt>),
     Return(Box<Expr>),
     Expr(Box<Expr>),
-    FuncDecl(Field, Vec<Field>, Box<Stmt>),
+    FuncDecl(String, DataType, Vec<Field>, Box<Stmt>),
     StructDecl(String, Vec<Field>)
 }
 
@@ -35,7 +34,8 @@ pub enum BinOpKind {
     Sub,
     Mul,
     Div,
-    Mod
+    Mod,
+    Assign
 }
 
 #[derive(Debug)]
@@ -43,11 +43,14 @@ pub enum UnOpKind {
     Neg,
     Compl,
     Not,
+    Deref
 }
 
-#[derive(Debug)]
 pub enum Expr {
     Binary(BinOpKind, Box<Expr>, Box<Expr>),
     Unary(UnOpKind, Box<Expr>),
-    Literal(Literal)
+    Call(Box<Expr>, Vec<Expr>),
+    Subscript(Box<Expr>, Box<Expr>),
+    Literal(Literal),
+    Name(String)
 }

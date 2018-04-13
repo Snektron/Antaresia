@@ -1,9 +1,11 @@
 [package]
 name = "antaresia"
 version = "0.1.0"
-authors = ["Robin Voetter <robin@voetter.nl>"]
+authors = ["Robin Voetter"]
 
 [dependencies]
-phf = "0.7.21"
-phf_builder = "0.7.21"
-lazy_static = "1.0"
+lalrpop-util = "0.15.1"
+regex = "0.2.0"
+
+[build-dependencies]
+lalrpop = "0.15.1"

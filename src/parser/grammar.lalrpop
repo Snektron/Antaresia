@@ -1,0 +1,127 @@
+use ast::{Program, Stmt};
+use ast::{BinOpKind, UnOpKind};
+use ast::{Expr, Literal};
+use ast::{DataType, Field};
+
+grammar;
+
+Box<T>: Box<T> = {
+    T => Box::new(<>)
+};
+
+Binary<Op, Next>: Expr = {
+    <lhs:Box<Binary<Op, Next>>> <o:Op> <rhs:Box<Next>> => Expr::Binary(o, lhs, rhs),
+    Next
+};
+
+List<T>: Vec<T> = {
+    <a:(<T> ",")*> <b:T> => {
+        let mut a = a;
+        a.push(b);
+        a
+    },
+    ! => Vec::new()
+};
+
+pub Program: Program = Stmt*
+    => Program(<>);
+
+Stmt: Stmt = {
+    CompoundStmt,
+    IfStmt,
+    WhileStmt,
+    FnDeclStmt,
+    StructDeclStmt,
+    <ShortFnDeclStmt> ";",
+    <ReturnStmt> ";",
+    <Box<Expr>> ";" => Stmt::Expr(<>)
+};
+
+CompoundStmt: Stmt = "{" <Stmt*> "}"
+    => Stmt::Compound(<>);
+
+WhileStmt: Stmt = "while" <cond:Box<Expr>> <csq:Box<CompoundStmt>>
+    => Stmt::While(cond, csq);
+
+IfStmt: Stmt = "if" <cond:Box<Expr>> <csq:Box<CompoundStmt>> <alt:("else" <Box<IfOrBlock>>)?>
+    => Stmt::If(cond, csq, alt);
+
+IfOrBlock = {
+    CompoundStmt,
+    IfStmt
+};
+
+ReturnStmt: Stmt = "return" <Box<Expr>>
+    => Stmt::Return(<>);
+
+FnDeclStmt: Stmt = "func" <name:Ident> "(" <params:List<Field>> ")" <rt:("->" <DataType>)?> <body:Box<CompoundStmt>>
+    => Stmt::FuncDecl(name, rt.unwrap_or(DataType::Void), params, body);
+
+ShortFnDeclStmt: Stmt = "func" <name:Ident> "(" <params:List<Field>> ")" <rt:("->" <DataType>)?> "=" <body:Box<Expr>>
+    => Stmt::FuncDecl(name, rt.unwrap_or(DataType::Void), params, Box::new(Stmt::Return(body)));
+
+Field: Field = <t:DataType> <i:Ident>
+    => Field(t, i);
+
+FieldList: Vec<Field> = <t:DataType> <is:List<Ident>>
+    => is.into_iter().map(|i| Field(t.clone(), i)).collect();
+
+StructDeclStmt: Stmt = "struct" <name:Ident> "{" <fields:(<FieldList> ";")+> "}"
+    => Stmt::StructDecl(name, fields.into_iter().flat_map(|x| x.into_iter()).collect());
+
+Expr = Assignment;
+
+Assignment = Binary<AssignmentKind, Sum>;
+AssignmentKind: BinOpKind = "=" => BinOpKind::Assign;
+
+Sum = Binary<SumKind, Factor>;
+SumKind: BinOpKind = {
+    "+" => BinOpKind::Add,
+    "-" => BinOpKind::Sub
+};
+
+Factor = Binary<FactorKind, Unary>;
+FactorKind: BinOpKind = {
+    "*" => BinOpKind::Mul,
+    "/" => BinOpKind::Div,
+    "%" => BinOpKind::Mod,
+};
+
+Unary = {
+    <o:UnaryOp> <rhs:Box<Unary>> => Expr::Unary(o, rhs),
+    PostfixExpr
+};
+
+UnaryOp: UnOpKind = {
+    "-" => UnOpKind::Neg,
+    "~" => UnOpKind::Compl,
+    "!" => UnOpKind::Not,
+    "*" => UnOpKind::Deref,
+};
+
+PostfixExpr: Expr = {
+    <lhs:Box<PostfixExpr>> "(" <params:List<Expr>> ")" => Expr::Call(lhs, params),
+    <lhs:Box<PostfixExpr>> "[" <rhs:Box<Expr>> "]" => Expr::Subscript(lhs, rhs),
+    Atom
+};
+
+Atom: Expr = {
+    Literal => Expr::Literal(<>),
+    "(" <Expr> ")",
+    Ident => Expr::Name(<>)
+};
+
+Literal: Literal = {
+    Integer => Literal::Integer(<>)
+};
+
+DataType: DataType = {
+    "u8" => DataType::U8,
+    "void" => DataType::Void,
+    <Box<DataType>> "*" => DataType::Ptr(<>),
+    Ident => DataType::Alias(<>)
+};
+
+Integer: i64 = r"[0-9]+" => <>.parse::<i64>().unwrap();
+
+Ident: String = r"[a-zA-Z_][a-zA-Z0-9_]*" => <>.to_owned();
