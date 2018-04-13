@@ -10,18 +10,20 @@ Box<T>: Box<T> = {
 };
 
 Binary<Op, Next>: Expr = {
-    <lhs:Box<Binary<Op, Next>>> <o:Op> <rhs:Box<Next>> => Expr::Binary(o, lhs, rhs),
+    <lhs:Box<Binary<Op, Next>>> <o:Op> <rhs:Box<Next>>
+        => Expr::Binary(o, lhs, rhs),
     Next
 };
 
-List<T>: Vec<T> = {
-    <a:(<T> ",")*> <b:T> => {
+List<T>: Vec<T> = <a:(<T> ",")*> <b:T>
+    => {
         let mut a = a;
         a.push(b);
         a
-    },
-    ! => Vec::new()
-};
+    };
+
+OptList<T>: Vec<T> = List<T>?
+    => <>.unwrap_or(Vec::new());
 
 pub Program: Program = Stmt*
     => Program(<>);
@@ -34,8 +36,8 @@ Stmt: Stmt = {
     StructDeclStmt,
     <ShortFnDeclStmt> ";",
     <ReturnStmt> ";",
-    <DeclStmt> ";",
-    <Box<Expr>> ";" => Stmt::Expr(<>)
+    <Box<Expr>> ";"
+        => Stmt::Expr(<>)
 };
 
 CompoundStmt: Stmt = "{" <Stmt*> "}"
@@ -55,28 +57,32 @@ IfOrBlock = {
 ReturnStmt: Stmt = "return" <Box<Expr>>
     => Stmt::Return(<>);
 
-FnDeclStmt: Stmt = "func" <name:Ident> "(" <params:List<Field>> ")" <rt:("->" <DataType>)?> <body:Box<CompoundStmt>>
+FnDeclStmt: Stmt = "func" <name:Ident> "(" <params:OptList<Field>> ")" <rt:("->" <DataType>)?> <body:Box<CompoundStmt>>
     => Stmt::FuncDecl(name, rt.unwrap_or(DataType::Void), params, body);
 
-ShortFnDeclStmt: Stmt = "func" <name:Ident> "(" <params:List<Field>> ")" <rt:("->" <DataType>)?> "=" <body:Box<Expr>>
+ShortFnDeclStmt: Stmt = "func" <name:Ident> "(" <params:OptList<Field>> ")" <rt:("->" <DataType>)?> "=" <body:Box<Expr>>
     => Stmt::FuncDecl(name, rt.unwrap_or(DataType::Void), params, Box::new(Stmt::Return(body)));
 
 Field: Field = <t:DataType> <i:Ident>
     => Field(t, i);
 
-FieldList: Vec<Field> = <t:DataType> <is:List<Ident>>
+FieldList: Vec<Field> = <t:DataType> <is:OptList<Ident>>
     => is.into_iter().map(|i| Field(t.clone(), i)).collect();
 
 StructDeclStmt: Stmt = "struct" <name:Ident> "{" <fields:(<FieldList> ";")+> "}"
     => Stmt::StructDecl(name, fields.into_iter().flat_map(|x| x.into_iter()).collect());
 
-DeclStmt: Stmt = <dt:DataType> <name:Ident>
-    => Stmt::VarDecl(dt, name, None);
+Expr = Declaration;
 
-Expr = Assignment;
+Declaration: Expr = {
+    <name:Ident> ":" <dt:DataType> <val:("=" <Box<Declaration>>)?>
+        => Expr::Decl(dt, name, val),
+    Assignment
+};
 
 Assignment = Binary<AssignmentKind, Sum>;
-AssignmentKind: BinOpKind = "=" => BinOpKind::Assign;
+AssignmentKind: BinOpKind = "="
+    => BinOpKind::Assign;
 
 Sum = Binary<SumKind, Factor>;
 SumKind: BinOpKind = {
@@ -92,7 +98,8 @@ FactorKind: BinOpKind = {
 };
 
 Unary = {
-    <o:UnaryKind> <rhs:Box<Unary>> => Expr::Unary(o, rhs),
+    <o:UnaryKind> <rhs:Box<Unary>>
+        => Expr::Unary(o, rhs),
     PostfixExpr
 };
 
@@ -104,8 +111,10 @@ UnaryKind: UnOpKind = {
 };
 
 PostfixExpr: Expr = {
-    <lhs:Box<PostfixExpr>> "(" <params:List<Expr>> ")" => Expr::Call(lhs, params),
-    <lhs:Box<PostfixExpr>> "[" <rhs:Box<Expr>> "]" => Expr::Subscript(lhs, rhs),
+    <lhs:Box<PostfixExpr>> "(" <params:OptList<Expr>> ")"
+        => Expr::Call(lhs, params),
+    <lhs:Box<PostfixExpr>> "[" <rhs:Box<Expr>> "]"
+        => Expr::Subscript(lhs, rhs),
     Atom
 };
 

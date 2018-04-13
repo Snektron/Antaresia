@@ -1,6 +1,12 @@
 *a = 1 + 2 * 3;
 
 func test() -> u16 {
+    a: u16* = 10;
+    b: u8 = c: u8 = d = 11;
+    e: u8;
+    f: u8 = 2 * (g: u16);
+    h: u8 = i = (j: u8 = 10);
+
     while 7 % 3 {
         8 * 5;
         return 10;
