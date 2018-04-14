@@ -88,11 +88,20 @@ impl Printer {
                 self.expr(expr);
             },
             Stmt::FuncDecl(ref name, ref rtype, ref params, ref body) => {
-                self.node(1, format!("FuncDecl(name = {}, return type = {:?}, params = {:?})", name, rtype, params));
+                self.node(1 + params.len(), format!("FuncDecl({:?} {})", rtype, name));
+
+                for param in params {
+                    self.node(0, format!("Param({:?} {})", param.0, param.1));
+                }
+
                 self.stmt(body);
             },
             Stmt::StructDecl(ref name, ref fields) => {
-                self.node(0, format!("StructDecl(name = {:?}, fields = {:?})", name, fields));
+                self.node(fields.len(), format!("StructDecl({})", name));
+
+                for field in fields {
+                    self.node(0, format!("Member({:?} {})", field.0, field.1));
+                }
             }
         }        
     }
@@ -121,10 +130,14 @@ impl Printer {
                 self.expr(lhs);
                 self.expr(rhs);
             },
-            Expr::Literal(ref x) => self.node(0, format!("Literal(value = {:?})", x)),
+            Expr::Cast(ref lhs, ref dt) => {
+                self.node(1, format!("Cast({:?})", dt));
+                self.expr(lhs);
+            },
+            Expr::Literal(ref x) => self.node(0, format!("Literal({:?})", x)),
             Expr::Name(ref name) => self.node(0, format!("Name(name = {})", name)),
-            Expr::Decl(ref dt, ref name, ref val) => {
-                self.node(if val.is_some() { 1 } else { 0 }, format!("Decl(type = {:?}, name = {})", dt, name));
+            Expr::Decl(ref field, ref val) => {
+                self.node(if val.is_some() { 1 } else { 0 }, format!("Decl({:?} {})", field.0, field.1));
                 if val.is_some() {
                     self.expr(val.as_ref().unwrap());
                 }

@@ -6,6 +6,7 @@ func test() -> u16 {
     e: u8;
     f: u8 = 2 * (g: u16);
     h: u8 = i = (j: u8 = 10);
+    k: u8 = *a as u8;
 
     while 7 % 3 {
         8 * 5;
@@ -21,9 +22,11 @@ func test() -> u16 {
     return test1(a + b, b);
 }
 
-func test1(u8 a, u8** b) -> u8 = -a[10] + !~b;
+func test1(a: u8, b: u8**) -> u8 = -a[10] + !~b;
+
+func aaa(a, b: u8, c, d: u16) -> u8 = a + b * c + d;
 
 struct Python {
-    u8 a, b;
-    u16 c;
+    a, b: u8;
+    c: u16;
 }

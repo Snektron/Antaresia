@@ -51,7 +51,8 @@ pub enum Expr {
     Unary(UnOpKind, Box<Expr>),
     Call(Box<Expr>, Vec<Expr>),
     Subscript(Box<Expr>, Box<Expr>),
+    Cast(Box<Expr>, DataType),
     Literal(Literal),
     Name(String),
-    Decl(DataType, String, Option<Box<Expr>>),
+    Decl(Field, Option<Box<Expr>>),
 }

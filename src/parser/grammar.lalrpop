@@ -57,16 +57,22 @@ IfOrBlock = {
 ReturnStmt: Stmt = "return" <Box<Expr>>
     => Stmt::Return(<>);
 
-FnDeclStmt: Stmt = "func" <name:Ident> "(" <params:OptList<Field>> ")" <rt:("->" <DataType>)?> <body:Box<CompoundStmt>>
-    => Stmt::FuncDecl(name, rt.unwrap_or(DataType::Void), params, body);
+FnDeclStmt: Stmt = "func" <name:Ident> "(" <params:OptList<FieldList>> ")" <rt:("->" <DataType>)?> <body:Box<CompoundStmt>>
+    => {
+        let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
+        Stmt::FuncDecl(name, rt.unwrap_or(DataType::Void), params, body)
+    };
 
-ShortFnDeclStmt: Stmt = "func" <name:Ident> "(" <params:OptList<Field>> ")" <rt:("->" <DataType>)?> "=" <body:Box<Expr>>
-    => Stmt::FuncDecl(name, rt.unwrap_or(DataType::Void), params, Box::new(Stmt::Return(body)));
+ShortFnDeclStmt: Stmt = "func" <name:Ident> "(" <params:OptList<FieldList>> ")" <rt:("->" <DataType>)?> "=" <body:Box<Expr>>
+    => {
+        let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
+        Stmt::FuncDecl(name, rt.unwrap_or(DataType::Void), params, Box::new(Stmt::Return(body)))
+    };
 
-Field: Field = <t:DataType> <i:Ident>
+Field: Field = <i:Ident> ":" <t:DataType>
     => Field(t, i);
 
-FieldList: Vec<Field> = <t:DataType> <is:OptList<Ident>>
+FieldList: Vec<Field> = <is:List<Ident>> ":" <t:DataType>
     => is.into_iter().map(|i| Field(t.clone(), i)).collect();
 
 StructDeclStmt: Stmt = "struct" <name:Ident> "{" <fields:(<FieldList> ";")+> "}"
@@ -75,14 +81,20 @@ StructDeclStmt: Stmt = "struct" <name:Ident> "{" <fields:(<FieldList> ";")+> "}"
 Expr = Declaration;
 
 Declaration: Expr = {
-    <name:Ident> ":" <dt:DataType> <val:("=" <Box<Declaration>>)?>
-        => Expr::Decl(dt, name, val),
+    <field:Field> <val:("=" <Box<Declaration>>)?>
+        => Expr::Decl(field, val),
     Assignment
 };
 
-Assignment = Binary<AssignmentKind, Sum>;
+Assignment = Binary<AssignmentKind, Cast>;
 AssignmentKind: BinOpKind = "="
     => BinOpKind::Assign;
+
+Cast = {
+    <lhs:Box<Cast>> "as" <dt:DataType> 
+        => Expr::Cast(lhs, dt),
+    Sum
+};
 
 Sum = Binary<SumKind, Factor>;
 SumKind: BinOpKind = {
