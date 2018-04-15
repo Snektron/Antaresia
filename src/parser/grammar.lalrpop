@@ -2,7 +2,7 @@ use ast::{Program, Stmt};
 use ast::{BinOpKind, UnOpKind};
 use ast::{Expr, Literal};
 use ast::{DataType, Field};
-use parser::{lexer, token};
+use parser::{lexer, span, token};
 
 grammar;
 
@@ -162,7 +162,7 @@ Ident: String = "IDENT"
 
 
 extern {
-    type Location = usize;
+    type Location = span::Location;
     type Error = lexer::UnexpectedCharError;
 
     enum token::Token {

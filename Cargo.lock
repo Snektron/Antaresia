@@ -11,6 +11,7 @@ name = "antaresia"
 version = "0.1.0"
 dependencies = [
  "lalrpop 0.15.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lalrpop-util 0.15.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "phf 0.7.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "phf_builder 0.7.21 (registry+https://github.com/rust-lang/crates.io-index)",

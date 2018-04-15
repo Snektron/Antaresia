@@ -1,10 +1,12 @@
 use std::iter::{Iterator, Peekable};
 use std::str::CharIndices;
 use std::error::Error;
+use std::default::Default;
 use std::fmt;
 use phf::Map;
 use phf_builder::Map as MapBuilder;
 use parser::token::Token;
+use parser::span::Location;
 
 lazy_static! {
     static ref KEYWORDS: Map<&'static str, Token> = {
@@ -23,18 +25,18 @@ lazy_static! {
 }
 
 pub type Spanned<T, L, E> = Result<(L, T, L), E>;
-pub type LexerResult = Spanned<Token, usize, UnexpectedCharError>;
+pub type LexerResult = Spanned<Token, Location, UnexpectedCharError>;
 
 pub struct Lexer<'i> {
     input: Peekable<CharIndices<'i>>,
-    offset: usize
+    location: Location
 }
 
 impl<'i> Lexer<'i> {
     pub fn new(input: &'i str) -> Self {
         Lexer {
             input: input.char_indices().peekable(),
-            offset: 0
+            location: Default::default()
         }
     }
 
@@ -48,8 +50,11 @@ impl<'i> Lexer<'i> {
     pub fn consume(&mut self) -> Option<char> {
         self.input
             .next()
-            .map(|(i, c)| {
-                self.offset = i;
+            .map(|(_, c)| {
+                match c {
+                    '\n' => self.location.next_line(),
+                    _ => self.location.next()
+                }
                 c
             })
     }
@@ -140,9 +145,9 @@ impl<'i> Lexer<'i> {
     pub fn next_token(&mut self) -> Option<LexerResult> {
         self.peek()
             .map(|c| {
-                let start = self.offset;
+                let start = self.location.clone();
                 self.next_inner(c)
-                    .map(|tok| (start, tok, self.offset))
+                    .map(|tok| (start, tok, self.location.clone()))
             }) 
     }
 
