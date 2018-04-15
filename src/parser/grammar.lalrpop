@@ -2,6 +2,7 @@ use ast::{Program, Stmt};
 use ast::{BinOpKind, UnOpKind};
 use ast::{Expr, Literal};
 use ast::{DataType, Field};
+use parser::{lexer, token};
 
 grammar;
 
@@ -91,7 +92,7 @@ AssignmentKind: BinOpKind = "="
     => BinOpKind::Assign;
 
 Cast = {
-    <lhs:Box<Cast>> "as" <dt:DataType> 
+    <lhs:Box<Cast>> "as" <dt:DataType>
         => Expr::Cast(lhs, dt),
     Sum
 };
@@ -147,6 +148,52 @@ DataType: DataType = {
     Ident => DataType::Alias(<>)
 };
 
-Integer: i64 = r"[0-9]+" => <>.parse::<i64>().unwrap();
+Integer: i64 = "INTEGER"
+    => match <> {
+        token::Token::Integer(s) => s.parse::<i64>().unwrap(),
+        _ => unreachable!()
+    };
 
-Ident: String = r"[a-zA-Z_][a-zA-Z0-9_]*" => <>.to_owned();
+Ident: String = "IDENT"
+    => match <> {
+        token::Token::Ident(s) => s,
+        _ => unreachable!()
+    };
+
+
+extern {
+    type Location = usize;
+    type Error = lexer::UnexpectedCharError;
+
+    enum token::Token {
+        "," => token::Token::Comma,
+        ";" => token::Token::Semi,
+        "{" => token::Token::BraceOpen,
+        "}" => token::Token::BraceClose,
+        "(" => token::Token::ParenOpen,
+        ")" => token::Token::ParenClose,
+        "[" => token::Token::BracketOpen,
+        "]" => token::Token::BracketClose,
+        "=" => token::Token::Equals,
+        ":" => token::Token::Colon,
+        "+" => token::Token::Plus,
+        "-" => token::Token::Minus,
+        "*" => token::Token::Star,
+        "/" => token::Token::Slash,
+        "%" => token::Token::Percent,
+        "~" => token::Token::Tilde,
+        "!" => token::Token::Exclamation,
+        "->" => token::Token::Arrow,
+        "while" => token::Token::While,
+        "if" => token::Token::If,
+        "else" => token::Token::Else,
+        "return" => token::Token::Return,
+        "func" => token::Token::Func,
+        "struct" => token::Token::Struct,
+        "as" => token::Token::As,
+        "u8" => token::Token::U8,
+        "void" => token::Token::Void,
+        "INTEGER" => token::Token::Integer(_),
+        "IDENT" => token::Token::Ident(_),
+    }
+}
