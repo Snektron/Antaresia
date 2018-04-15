@@ -1,8 +1,18 @@
 use std::convert::AsRef;
 use std::cmp;
-use ast::{Expr, Stmt, Program};
+use ast::{Program, Stmt, Expr, ExprKind};
+use check::Check;
 
-pub struct Printer {
+pub fn print<P>(ast: &P)
+where P: Print {
+    ast.print(&mut Printer::new())
+}
+
+trait Print {
+    fn print(&self, p: &mut Printer);
+}
+
+struct Printer {
     stack: Vec<usize>
 }
 
@@ -11,6 +21,11 @@ impl Printer {
         Printer {
             stack: Vec::new()
         }
+    }
+
+    fn leaf<S>(&mut self, text: S)
+    where S: AsRef<str> {
+        self.node(0, text)
     }
 
     fn node<S>(&mut self, children: usize, text: S)
@@ -46,100 +61,112 @@ impl Printer {
             }
         }
     }
+}
 
-    pub fn program(&mut self, program: &Program) {
-        self.node(program.0.len(), format!("Program(#stmts = {})", program.0.len()));
-        for child in program.0.iter() {
-            self.stmt(child);
+impl Print for Program {
+    fn print(&self, p: &mut Printer) {
+        p.node(self.0.len(), format!("Program(#stmts = {})", self.0.len()));
+
+        for child in self.0.iter() {
+            child.print(p);
         }
     }
+}
 
-    pub fn stmt(&mut self, stmt: &Stmt) {
-        match *stmt {
+impl Print for Stmt {
+    fn print(&self, p: &mut Printer) {
+        match *self {
             Stmt::Compound(ref children) => {
-                self.node(children.len(), format!("Compound(#stmts = {})", children.len()));
+                p.node(children.len(), format!("Compound(#stmts = {})", children.len()));
 
                 for child in children {
-                    self.stmt(child);
+                    child.print(p);
                 }
             },
             Stmt::If(ref cond, ref cons, None) => {
-                self.node(2, "If");
-                self.expr(cond);
-                self.stmt(cons);
+                p.node(2, "If");
+                cond.print(p);
+                cons.print(p);
             },
             Stmt::If(ref cond, ref cons, Some(ref alt)) => {
-                self.node(3, "IfElse");
-                self.expr(cond);
-                self.stmt(cons);
-                self.stmt(alt);
+                p.node(3, "IfElse");
+                cond.print(p);
+                cons.print(p);
+                alt.print(p);
             },
             Stmt::While(ref cond, ref cons) => {
-                self.node(2, "While");
-                self.expr(cond);
-                self.stmt(cons);
+                p.node(2, "While");
+                cond.print(p);
+                cons.print(p);
             },
             Stmt::Return(ref expr) => {
-                self.node(1, "Return");
-                self.expr(expr);
+                p.node(1, "Return");
+                expr.print(p);
             },
             Stmt::Expr(ref expr) => {
-                self.node(1, "Expr");
-                self.expr(expr);
+                p.node(1, "Expr");
+                expr.print(p);
             },
             Stmt::FuncDecl(ref name, ref rtype, ref params, ref body) => {
-                self.node(1 + params.len(), format!("FuncDecl({:?} {})", rtype, name));
+                p.node(1 + params.len(), format!("FuncDecl({:?} {})", rtype, name));
 
                 for param in params {
-                    self.node(0, format!("Param({:?} {})", param.0, param.1));
+                    p.leaf(format!("Param({:?} {})", param.0, param.1));
                 }
 
-                self.stmt(body);
+                body.print(p);
             },
             Stmt::StructDecl(ref name, ref fields) => {
-                self.node(fields.len(), format!("StructDecl({})", name));
+                p.node(fields.len(), format!("StructDecl({})", name));
 
                 for field in fields {
-                    self.node(0, format!("Member({:?} {})", field.0, field.1));
+                    p.leaf(format!("Member({:?} {})", field.0, field.1));
                 }
             }
-        }        
+        }   
     }
+}
 
-    pub fn expr(&mut self, expr: &Expr) {
-        match *expr {
-            Expr::Binary(ref op, ref lhs, ref rhs) => {
-                self.node(2, format!("Binary(op = {:?})", op));
-                self.expr(lhs);
-                self.expr(rhs);
+impl<C> Print for Expr<C>
+where C: Check {
+    fn print(&self, p: &mut Printer) {
+        match self.kind {
+            ExprKind::Binary(ref op, ref lhs, ref rhs) => {
+                p.node(2, format!("Binary(op = {:?})", op));
+                lhs.print(p);
+                rhs.print(p);
             },
-            Expr::Unary(ref op, ref rhs) => {
-                self.node(1, format!("Unary(op = {:?})", op));
-                self.expr(rhs);
+            ExprKind::Unary(ref op, ref rhs) => {
+                p.node(1, format!("Unary(op = {:?})", op));
+                rhs.print(p);
             },
-            Expr::Call(ref callee, ref args) => {
-                self.node(args.len() + 1, "Call");
-                self.expr(callee);
+            ExprKind::Call(ref callee, ref args) => {
+                p.node(args.len() + 1, "Call");
+                callee.print(p);
 
                 for arg in args {
-                    self.expr(arg);
+                    arg.print(p);
                 }
             },
-            Expr::Subscript(ref lhs, ref rhs) => {
-                self.node(2, "Subscript");
-                self.expr(lhs);
-                self.expr(rhs);
+            ExprKind::Subscript(ref lhs, ref rhs) => {
+                p.node(2, "Subscript");
+                lhs.print(p);
+                rhs.print(p);
             },
-            Expr::Cast(ref lhs, ref dt) => {
-                self.node(1, format!("Cast({:?})", dt));
-                self.expr(lhs);
+            ExprKind::Cast(ref lhs, ref dt) => {
+                p.node(1, format!("Cast({:?})", dt));
+                lhs.print(p);
             },
-            Expr::Literal(ref x) => self.node(0, format!("Literal({:?})", x)),
-            Expr::Name(ref name) => self.node(0, format!("Name(name = {})", name)),
-            Expr::Decl(ref field, ref val) => {
-                self.node(if val.is_some() { 1 } else { 0 }, format!("Decl({:?} {})", field.0, field.1));
-                if val.is_some() {
-                    self.expr(val.as_ref().unwrap());
+            ExprKind::Literal(ref x) => p.leaf(format!("Literal({:?})", x)),
+            ExprKind::Name(ref name) => p.leaf(format!("Name(name = {})", name)),
+            ExprKind::Decl(ref field, ref val) => {
+                let text = format!("Decl({:?} {})", field.0, field.1);
+                match *val {
+                    Some(ref expr) => {
+                        p.node(1, text);
+                        expr.print(p);
+                    },
+                    None => p.leaf(text)
                 }
             }
         }

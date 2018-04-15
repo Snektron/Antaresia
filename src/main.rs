@@ -7,9 +7,10 @@ extern crate lazy_static;
 mod ast;
 mod parser;
 mod check;
+mod datatype;
 
 use std::str::from_utf8;
-use ast::print::Printer;
+use ast::print;
 use parser::Parser;
 use parser::lexer::Lexer;
 
@@ -19,7 +20,7 @@ fn main() {
     let ast = Parser::new().parse(lexer);
 
     match ast {
-        Ok(ref ast) => Printer::new().program(ast),
+        Ok(ref ast) => print::print(ast),
         Err(ref err) => println!("{}", err)
     }
 }
