@@ -43,7 +43,8 @@ pub enum UnOpKind {
     Neg,
     Compl,
     Not,
-    Deref
+    Deref,
+    Ref
 }
 
 pub enum Expr {

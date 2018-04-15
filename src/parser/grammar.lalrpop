@@ -2,7 +2,7 @@ use ast::{Program, Stmt};
 use ast::{BinOpKind, UnOpKind};
 use ast::{Expr, Literal};
 use ast::{DataType, Field};
-use parser::{lexer, span, token};
+use parser::{lexer, location, token};
 
 grammar;
 
@@ -121,6 +121,7 @@ UnaryKind: UnOpKind = {
     "~" => UnOpKind::Compl,
     "!" => UnOpKind::Not,
     "*" => UnOpKind::Deref,
+    "&" => UnOpKind::Ref
 };
 
 PostfixExpr: Expr = {
@@ -162,7 +163,7 @@ Ident: String = "IDENT"
 
 
 extern {
-    type Location = span::Location;
+    type Location = location::Location;
     type Error = lexer::UnexpectedCharError;
 
     enum token::Token {
@@ -183,6 +184,7 @@ extern {
         "%" => token::Token::Percent,
         "~" => token::Token::Tilde,
         "!" => token::Token::Exclamation,
+        "&" => token::Token::Ampersand,
         "->" => token::Token::Arrow,
         "while" => token::Token::While,
         "if" => token::Token::If,

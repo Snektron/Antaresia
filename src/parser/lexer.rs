@@ -6,7 +6,7 @@ use std::fmt;
 use phf::Map;
 use phf_builder::Map as MapBuilder;
 use parser::token::Token;
-use parser::span::Location;
+use parser::location::Location;
 
 lazy_static! {
     static ref KEYWORDS: Map<&'static str, Token> = {
@@ -77,7 +77,7 @@ impl<'i> Lexer<'i> {
         }
 
         macro_rules! token_case {
-            {default $z:path $(,$x:pat => $y:path)+} => {{
+            {def => $z:path $(,$x:pat => $y:path)+} => {{
                 self.consume();
                 match self.peek() {
                     $(
@@ -104,8 +104,9 @@ impl<'i> Lexer<'i> {
             '%' => token!(Token::Percent),
             '~' => token!(Token::Tilde),
             '!' => token!(Token::Exclamation),
+            '&' => token!(Token::Ampersand),
             '-' => token_case!{
-                default Token::Minus,
+                def => Token::Minus,
                 '>' => Token::Arrow
             },
             '/' => {

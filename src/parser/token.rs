@@ -19,6 +19,7 @@ pub enum Token {
     Percent,
     Tilde,
     Exclamation,
+    Ampersand,
     Arrow,
     
     If,
@@ -59,6 +60,7 @@ impl fmt::Display for Token {
             Token::Percent => write!(f, "%"),
             Token::Tilde => write!(f, "~"),
             Token::Exclamation => write!(f, "!"),
+            Token::Ampersand => write!(f, "&"),
             Token::Arrow => write!(f, "->"),
             Token::If => write!(f, "if"),
             Token::Else => write!(f, "else"),
