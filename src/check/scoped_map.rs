@@ -3,7 +3,9 @@ use std::hash::Hash;
 use std::cmp::Eq;
 use std::borrow::Borrow;
 
-pub struct ScopedMap<K, V> {
+#[derive(Debug)]
+pub struct ScopedMap<K, V>
+where K: Hash + Eq {
     maps: Vec<HashMap<K, V>>
 }
 

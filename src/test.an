@@ -8,6 +8,7 @@ func test() -> u16 {
     h: u8 = i = (j: u8 = 10);
     k: u8 = *a as u8;
     l: u8 = &k;
+    m: func() -> u16 = test;
 
     while 7 % 3 {
         8 * 5;

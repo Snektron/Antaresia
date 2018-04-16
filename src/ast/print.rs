@@ -1,7 +1,7 @@
 use std::convert::AsRef;
 use std::cmp;
 use ast::{Program, Stmt, StmtKind, Expr, ExprKind};
-use check::{CheckStmt, CheckExpr};
+use check::{StmtInfo, ExprInfo};
 
 pub fn print<P>(ast: &P)
 where P: Print {
@@ -63,8 +63,8 @@ impl Printer {
     }
 }
 
-impl<C> Print for Program<C>
-where C: CheckStmt {
+impl<I> Print for Program<I>
+where I: StmtInfo {
     fn print(&self, p: &mut Printer) {
         p.node(self.stmts.len(), format!("Program(#stmts = {})", self.stmts.len()));
 
@@ -74,8 +74,8 @@ where C: CheckStmt {
     }
 }
 
-impl<C> Print for Stmt<C>
-where C: CheckStmt {
+impl<I> Print for Stmt<I>
+where I: StmtInfo {
     fn print(&self, p: &mut Printer) {
         match self.kind {
             StmtKind::Compound(ref children) => {
@@ -129,8 +129,8 @@ where C: CheckStmt {
     }
 }
 
-impl<C> Print for Expr<C>
-where C: CheckExpr {
+impl<I> Print for Expr<I>
+where I: ExprInfo {
     fn print(&self, p: &mut Printer) {
         match self.kind {
             ExprKind::Binary(ref op, ref lhs, ref rhs) => {

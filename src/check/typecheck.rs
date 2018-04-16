@@ -1,11 +1,11 @@
 use std::error::Error;
 use std::fmt;
 use check::scoped_map::ScopedMap;
-use check::{CheckStmt, UncheckedStmt, CheckedStmt};
-use check::{CheckExpr, UncheckedExpr, CheckedExpr};
-use datatype::{DataType, Field};
+use check::{StmtInfo, UncheckedStmtInfo, CheckedStmtInfo};
+use check::{ExprInfo, UncheckedExprInfo, CheckedExprInfo};
+use datatype::DataType;
 use ast::Name;
-use ast::{Program, Stmt, StmtKind, Expr, ExprKind};
+use ast::{Program, Stmt, Expr};
 
 pub struct TypeChecker {
     scope: ScopedMap<Name, DataType>
@@ -25,24 +25,24 @@ pub trait Check {
     fn check(self, tc: &mut TypeChecker) -> Result<Self::Target, TypeError>;
 }
 
-impl Check for Program<UncheckedStmt> {
-    type Target = Program<CheckedStmt>;
+impl Check for Program {
+    type Target = Program<CheckedStmtInfo>;
 
     fn check(self, tc: &mut TypeChecker) -> Result<Self::Target, TypeError> {
         Err(TypeError::Redefinition("test".to_owned()))
     }
 }
 
-impl Check for Stmt<UncheckedStmt> {
-    type Target = Stmt<CheckedStmt>;
+impl Check for Stmt {
+    type Target = Stmt<CheckedStmtInfo>;
 
     fn check(self, tc: &mut TypeChecker) -> Result<Self::Target, TypeError> {
         Err(TypeError::Redefinition("test".to_owned()))
     }
 }
 
-impl Check for Expr<UncheckedExpr> {
-    type Target = Expr<CheckedExpr>;
+impl Check for Expr {
+    type Target = Expr<CheckedExprInfo>;
 
     fn check(self, tc: &mut TypeChecker) -> Result<Self::Target, TypeError> {
         Err(TypeError::Redefinition("test".to_owned()))

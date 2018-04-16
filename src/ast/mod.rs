@@ -6,32 +6,32 @@ pub use self::print::print;
 
 use std::default::Default;
 use datatype::{DataType, Field};
-use check::{CheckStmt, UncheckedStmt};
+use check::{StmtInfo, UncheckedStmtInfo};
 
 pub type Name = String;
 
-pub struct Program<C = UncheckedStmt>
-where C: CheckStmt {
-    pub stmts: Vec<Stmt<C>>
+pub struct Program<I = UncheckedStmtInfo>
+where I: StmtInfo {
+    pub stmts: Vec<Stmt<I>>
 }
 
-impl<C> Program<C>
-where C: CheckStmt {
-    pub fn new(stmts: Vec<Stmt<C>>) -> Self {
+impl<I> Program<I>
+where I: StmtInfo {
+    pub fn new(stmts: Vec<Stmt<I>>) -> Self {
         Program {
             stmts
         }
     }
 }
 
-pub struct Stmt<C = UncheckedStmt>
-where C: CheckStmt {
-    pub kind: StmtKind<C>,
-    pub check: C
+pub struct Stmt<I = UncheckedStmtInfo>
+where I: StmtInfo {
+    pub kind: StmtKind<I>,
+    pub check: I
 }
 
-impl Stmt<UncheckedStmt> {
-    pub fn new(kind: StmtKind<UncheckedStmt>) -> Self {
+impl Stmt<UncheckedStmtInfo> {
+    pub fn new(kind: StmtKind<UncheckedStmtInfo>) -> Self {
         Stmt {
             kind,
             check: Default::default()
@@ -39,13 +39,13 @@ impl Stmt<UncheckedStmt> {
     }
 }
 
-pub enum StmtKind<C = UncheckedStmt>
-where C: CheckStmt {
-    Compound(Vec<Stmt<C>>),
-    If(Box<Expr<C::Expr>>, Box<Stmt<C>>, Option<Box<Stmt<C>>>),
-    While(Box<Expr<C::Expr>>, Box<Stmt<C>>),
-    Return(Box<Expr<C::Expr>>),
-    Expr(Box<Expr<C::Expr>>),
-    FuncDecl(Name, DataType, Vec<Field>, Box<Stmt<C>>),
+pub enum StmtKind<I = UncheckedStmtInfo>
+where I: StmtInfo {
+    Compound(Vec<Stmt<I>>),
+    If(Box<Expr<I::ExprInfo>>, Box<Stmt<I>>, Option<Box<Stmt<I>>>),
+    While(Box<Expr<I::ExprInfo>>, Box<Stmt<I>>),
+    Return(Box<Expr<I::ExprInfo>>),
+    Expr(Box<Expr<I::ExprInfo>>),
+    FuncDecl(Name, DataType, Vec<Field>, Box<Stmt<I>>),
     StructDecl(Name, Vec<Field>)
 }

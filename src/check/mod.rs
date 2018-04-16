@@ -6,42 +6,42 @@ pub use self::typecheck::{TypeChecker, Check};
 use datatype::DataType;
 use std::default::Default;
 
-pub trait CheckStmt {
-    type Expr: CheckExpr;
+pub trait StmtInfo {
+    type ExprInfo: ExprInfo;
 }
 
-pub struct CheckedStmt {}
+pub struct CheckedStmtInfo {}
 
-impl CheckStmt for CheckedStmt {
-    type Expr = CheckedExpr;
+impl StmtInfo for CheckedStmtInfo {
+    type ExprInfo = CheckedExprInfo;
 }
 
-pub struct UncheckedStmt {}
+pub struct UncheckedStmtInfo {}
 
-impl Default for UncheckedStmt {
+impl Default for UncheckedStmtInfo {
     fn default() -> Self {
-        UncheckedStmt {}
+        UncheckedStmtInfo {}
     }
 }
 
-impl CheckStmt for UncheckedStmt {
-    type Expr = UncheckedExpr;
+impl StmtInfo for UncheckedStmtInfo {
+    type ExprInfo = UncheckedExprInfo;
 }
 
-pub trait CheckExpr {}
+pub trait ExprInfo {}
 
-pub struct UncheckedExpr {}
+pub struct UncheckedExprInfo {}
 
-impl CheckExpr for UncheckedExpr {}
+impl ExprInfo for UncheckedExprInfo {}
 
-impl Default for UncheckedExpr {
+impl Default for UncheckedExprInfo {
     fn default() -> Self {
-        UncheckedExpr {}
+        UncheckedExprInfo {}
     }
 }
 
-pub struct CheckedExpr {
+pub struct CheckedExprInfo {
     datatype: DataType
 }
 
-impl CheckExpr for CheckedExpr {}
+impl ExprInfo for CheckedExprInfo {}
