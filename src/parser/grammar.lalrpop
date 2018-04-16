@@ -1,4 +1,4 @@
-use ast::{Program, Stmt};
+use ast::{Program, Stmt, StmtKind};
 use ast::{BinOpKind, UnOpKind};
 use ast::{Expr, ExprKind, Literal};
 use datatype::{DataType, Field};
@@ -8,12 +8,9 @@ grammar;
 
 Box<T>: Box<T> = T => Box::new(<>);
 
-Expr<T>: Expr<T> = T => Expr::new(<>);
-ExprBox<T> = Box<Expr<T>>;
-
 Binary<Op, Next>: Expr = {
     <lhs:Box<Binary<Op, Next>>> <o:Op> <rhs:Box<Next>>
-        => Expr::Binary(o, lhs, rhs),
+        => Expr::new(ExprKind::Binary(o, lhs, rhs)),
     Next
 };
 
@@ -28,7 +25,7 @@ OptList<T>: Vec<T> = List<T>?
     => <>.unwrap_or(Vec::new());
 
 pub Program: Program = Stmt*
-    => Program(<>);
+    => Program::new(<>);
 
 Stmt: Stmt = {
     CompoundStmt,
@@ -38,37 +35,37 @@ Stmt: Stmt = {
     StructDeclStmt,
     <ShortFnDeclStmt> ";",
     <ReturnStmt> ";",
-    <Box<Expression>> ";"
-        => Stmt::Expr(<>)
+    <Box<Expr>> ";"
+        => Stmt::new(StmtKind::Expr(<>))
 };
 
 CompoundStmt: Stmt = "{" <Stmt*> "}"
-    => Stmt::Compound(<>);
+    => Stmt::new(StmtKind::Compound(<>));
 
-WhileStmt: Stmt = "while" <cond:Box<Expression>> <csq:Box<CompoundStmt>>
-    => Stmt::While(cond, csq);
+WhileStmt: Stmt = "while" <cond:Box<Expr>> <csq:Box<CompoundStmt>>
+    => Stmt::new(StmtKind::While(cond, csq));
 
-IfStmt: Stmt = "if" <cond:Box<Expression>> <csq:Box<CompoundStmt>> <alt:("else" <Box<IfOrBlock>>)?>
-    => Stmt::If(cond, csq, alt);
+IfStmt: Stmt = "if" <cond:Box<Expr>> <csq:Box<CompoundStmt>> <alt:("else" <Box<IfOrBlock>>)?>
+    => Stmt::new(StmtKind::If(cond, csq, alt));
 
 IfOrBlock = {
     CompoundStmt,
     IfStmt
 };
 
-ReturnStmt: Stmt = "return" <Box<Expression>>
-    => Stmt::Return(<>);
+ReturnStmt: Stmt = "return" <Box<Expr>>
+    => Stmt::new(StmtKind::Return(<>));
 
 FnDeclStmt: Stmt = "func" <name:Ident> "(" <params:OptList<FieldList>> ")" <rt:("->" <DataType>)?> <body:Box<CompoundStmt>>
     => {
         let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
-        Stmt::FuncDecl(name, rt.unwrap_or(DataType::Void), params, body)
+        Stmt::new(StmtKind::FuncDecl(name, rt.unwrap_or(DataType::Void), params, body))
     };
 
-ShortFnDeclStmt: Stmt = "func" <name:Ident> "(" <params:OptList<FieldList>> ")" <rt:("->" <DataType>)?> "=" <body:Box<Expression>>
+ShortFnDeclStmt: Stmt = "func" <name:Ident> "(" <params:OptList<FieldList>> ")" <rt:("->" <DataType>)?> "=" <body:Box<Expr>>
     => {
         let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
-        Stmt::FuncDecl(name, rt.unwrap_or(DataType::Void), params, Box::new(Stmt::Return(body)))
+        Stmt::new(StmtKind::FuncDecl(name, rt.unwrap_or(DataType::Void), params, Box::new(Stmt::new(StmtKind::Return(body)))))
     };
 
 Field: Field = <i:Ident> ":" <t:DataType>
@@ -78,13 +75,13 @@ FieldList: Vec<Field> = <is:List<Ident>> ":" <t:DataType>
     => is.into_iter().map(|i| Field(t.clone(), i)).collect();
 
 StructDeclStmt: Stmt = "struct" <name:Ident> "{" <fields:(<FieldList> ";")+> "}"
-    => Stmt::StructDecl(name, fields.into_iter().flat_map(|x| x.into_iter()).collect());
+    => Stmt::new(StmtKind::StructDecl(name, fields.into_iter().flat_map(|x| x.into_iter()).collect()));
 
-Expression = Declaration;
+Expr = Declaration;
 
 Declaration: Expr = {
     <field:Field> <val:("=" <Box<Declaration>>)?>
-        => Expr::Decl(field, val),
+        => Expr::new(ExprKind::Decl(field, val)),
     Assignment
 };
 
@@ -94,7 +91,7 @@ AssignmentKind: BinOpKind = "="
 
 Cast = {
     <lhs:Box<Cast>> "as" <dt:DataType>
-        => Expr::Cast(lhs, dt),
+        => Expr::new(ExprKind::Cast(lhs, dt)),
     Sum
 };
 
@@ -113,7 +110,7 @@ FactorKind: BinOpKind = {
 
 Unary = {
     <o:UnaryKind> <rhs:Box<Unary>>
-        => Expr::Unary(o, rhs),
+        => Expr::new(ExprKind::Unary(o, rhs)),
     PostfixExpr
 };
 
@@ -126,17 +123,17 @@ UnaryKind: UnOpKind = {
 };
 
 PostfixExpr: Expr = {
-    <lhs:Box<PostfixExpr>> "(" <params:OptList<Expression>> ")"
-        => Expr::Call(lhs, params),
-    <lhs:Box<PostfixExpr>> "[" <rhs:Box<Expression>> "]"
-        => Expr::Subscript(lhs, rhs),
+    <lhs:Box<PostfixExpr>> "(" <params:OptList<Expr>> ")"
+        => Expr::new(ExprKind::Call(lhs, params)),
+    <lhs:Box<PostfixExpr>> "[" <rhs:Box<Expr>> "]"
+        => Expr::new(ExprKind::Subscript(lhs, rhs)),
     Atom
 };
 
 Atom: Expr = {
-    Literal => Expr::Literal(<>),
-    "(" <Expression> ")",
-    Ident => Expr::Name(<>)
+    Literal => Expr::new(ExprKind::Literal(<>)),
+    "(" <Expr> ")",
+    Ident => Expr::new(ExprKind::Name(<>))
 };
 
 Literal: Literal = {

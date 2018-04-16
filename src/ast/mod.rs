@@ -1,67 +1,51 @@
 pub mod print;
+pub mod expr;
 
+pub use self::expr::{Expr, ExprKind, Literal, BinOpKind, UnOpKind};
+pub use self::print::print;
+
+use std::default::Default;
 use datatype::{DataType, Field};
-use check::{Check, UnChecked};
+use check::{CheckStmt, UncheckedStmt};
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum Literal {
-    Integer(i64)
+pub type Name = String;
+
+pub struct Program<C = UncheckedStmt>
+where C: CheckStmt {
+    pub stmts: Vec<Stmt<C>>
 }
 
-pub struct Program(pub Vec<Stmt>);
-
-pub enum Stmt {
-    Compound(Vec<Stmt>),
-    If(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
-    While(Box<Expr>, Box<Stmt>),
-    Return(Box<Expr>),
-    Expr(Box<Expr>),
-    FuncDecl(String, DataType, Vec<Field>, Box<Stmt>),
-    StructDecl(String, Vec<Field>)
-}
-
-#[derive(Debug)]
-pub enum BinOpKind {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    Assign
-}
-
-#[derive(Debug)]
-pub enum UnOpKind {
-    Neg,
-    Compl,
-    Not,
-    Deref,
-    Ref
-}
-
-pub struct Expr<C = UnChecked>
-where C: Check {
-    pub kind: ExprKind<C>,
-    pub check: C
-}
-
-impl Expr<UnChecked> {
-    pub fn new(kind: ExprKind<UnChecked>) -> Self {
-        Expr {
-            kind,
-            check: UnChecked {}
+impl<C> Program<C>
+where C: CheckStmt {
+    pub fn new(stmts: Vec<Stmt<C>>) -> Self {
+        Program {
+            stmts
         }
     }
 }
 
-pub enum ExprKind<C = UnChecked>
-where C: Check {
-    Binary(BinOpKind, Box<Expr<C>>, Box<Expr<C>>),
-    Unary(UnOpKind, Box<Expr<C>>),
-    Call(Box<Expr<C>>, Vec<Expr<C>>),
-    Subscript(Box<Expr<C>>, Box<Expr<C>>),
-    Cast(Box<Expr<C>>, DataType),
-    Literal(Literal),
-    Name(String),
-    Decl(Field, Option<Box<Expr<C>>>),
+pub struct Stmt<C = UncheckedStmt>
+where C: CheckStmt {
+    pub kind: StmtKind<C>,
+    pub check: C
+}
+
+impl Stmt<UncheckedStmt> {
+    pub fn new(kind: StmtKind<UncheckedStmt>) -> Self {
+        Stmt {
+            kind,
+            check: Default::default()
+        }
+    }
+}
+
+pub enum StmtKind<C = UncheckedStmt>
+where C: CheckStmt {
+    Compound(Vec<Stmt<C>>),
+    If(Box<Expr<C::Expr>>, Box<Stmt<C>>, Option<Box<Stmt<C>>>),
+    While(Box<Expr<C::Expr>>, Box<Stmt<C>>),
+    Return(Box<Expr<C::Expr>>),
+    Expr(Box<Expr<C::Expr>>),
+    FuncDecl(Name, DataType, Vec<Field>, Box<Stmt<C>>),
+    StructDecl(Name, Vec<Field>)
 }

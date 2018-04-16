@@ -1,18 +1,18 @@
 use std::convert::AsRef;
 use std::cmp;
-use ast::{Program, Stmt, Expr, ExprKind};
-use check::Check;
+use ast::{Program, Stmt, StmtKind, Expr, ExprKind};
+use check::{CheckStmt, CheckExpr};
 
 pub fn print<P>(ast: &P)
 where P: Print {
     ast.print(&mut Printer::new())
 }
 
-trait Print {
+pub trait Print {
     fn print(&self, p: &mut Printer);
 }
 
-struct Printer {
+pub struct Printer {
     stack: Vec<usize>
 }
 
@@ -63,51 +63,53 @@ impl Printer {
     }
 }
 
-impl Print for Program {
+impl<C> Print for Program<C>
+where C: CheckStmt {
     fn print(&self, p: &mut Printer) {
-        p.node(self.0.len(), format!("Program(#stmts = {})", self.0.len()));
+        p.node(self.stmts.len(), format!("Program(#stmts = {})", self.stmts.len()));
 
-        for child in self.0.iter() {
+        for child in self.stmts.iter() {
             child.print(p);
         }
     }
 }
 
-impl Print for Stmt {
+impl<C> Print for Stmt<C>
+where C: CheckStmt {
     fn print(&self, p: &mut Printer) {
-        match *self {
-            Stmt::Compound(ref children) => {
+        match self.kind {
+            StmtKind::Compound(ref children) => {
                 p.node(children.len(), format!("Compound(#stmts = {})", children.len()));
 
                 for child in children {
                     child.print(p);
                 }
             },
-            Stmt::If(ref cond, ref cons, None) => {
+            StmtKind::If(ref cond, ref cons, None) => {
                 p.node(2, "If");
                 cond.print(p);
                 cons.print(p);
             },
-            Stmt::If(ref cond, ref cons, Some(ref alt)) => {
+            StmtKind::If(ref cond, ref cons, Some(ref alt)) => {
                 p.node(3, "IfElse");
                 cond.print(p);
                 cons.print(p);
                 alt.print(p);
             },
-            Stmt::While(ref cond, ref cons) => {
+            StmtKind::While(ref cond, ref cons) => {
                 p.node(2, "While");
                 cond.print(p);
                 cons.print(p);
             },
-            Stmt::Return(ref expr) => {
+            StmtKind::Return(ref expr) => {
                 p.node(1, "Return");
                 expr.print(p);
             },
-            Stmt::Expr(ref expr) => {
+            StmtKind::Expr(ref expr) => {
                 p.node(1, "Expr");
                 expr.print(p);
             },
-            Stmt::FuncDecl(ref name, ref rtype, ref params, ref body) => {
+            StmtKind::FuncDecl(ref name, ref rtype, ref params, ref body) => {
                 p.node(1 + params.len(), format!("FuncDecl({:?} {})", rtype, name));
 
                 for param in params {
@@ -116,7 +118,7 @@ impl Print for Stmt {
 
                 body.print(p);
             },
-            Stmt::StructDecl(ref name, ref fields) => {
+            StmtKind::StructDecl(ref name, ref fields) => {
                 p.node(fields.len(), format!("StructDecl({})", name));
 
                 for field in fields {
@@ -128,7 +130,7 @@ impl Print for Stmt {
 }
 
 impl<C> Print for Expr<C>
-where C: Check {
+where C: CheckExpr {
     fn print(&self, p: &mut Printer) {
         match self.kind {
             ExprKind::Binary(ref op, ref lhs, ref rhs) => {
