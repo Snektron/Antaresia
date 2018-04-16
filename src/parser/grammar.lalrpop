@@ -141,10 +141,21 @@ Literal: Literal = {
 };
 
 DataType: DataType = {
+    "func" "(" <params:OptList<DataType>> ")" <rt:("->" <Box<DataType>>)?>
+        => DataType::Func(rt.unwrap_or(Box::new(DataType::Void)), params),
+    DataTypePtr
+};
+
+DataTypePtr: DataType = {
+    <Box<DataTypePtr>> "*" => DataType::Ptr(<>),
+    DataTypeAtom
+};
+
+DataTypeAtom: DataType = {
     "u8" => DataType::U8,
     "void" => DataType::Void,
-    <Box<DataType>> "*" => DataType::Ptr(<>),
-    Ident => DataType::Alias(<>)
+    Ident => DataType::Alias(<>),
+    "(" <DataType> ")"
 };
 
 Integer: i64 = "INTEGER"

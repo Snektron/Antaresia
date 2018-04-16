@@ -8,14 +8,24 @@ use ast::Name;
 use ast::{Program, Stmt, Expr};
 
 pub struct TypeChecker {
-    scope: ScopedMap<Name, DataType>
+    bindings: ScopedMap<Name, DataType>,
 }
 
 impl TypeChecker {
     pub fn new() -> Self {
         TypeChecker {
-            scope: ScopedMap::new()
+            bindings: ScopedMap::new()
         }
+    }
+
+    pub fn enter(&mut self) {
+        self.bindings.enter();
+    //    self.types.enter();
+    }
+
+    pub fn exit(&mut self) {
+        self.bindings.exit();
+    //    self.types.exit();
     }
 }
 

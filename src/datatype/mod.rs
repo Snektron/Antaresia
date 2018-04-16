@@ -6,7 +6,7 @@ pub enum DataType {
     Void,
     Alias(Name),
     Ptr(Box<DataType>),
-    Func(Box<DataType>, Vec<DataType>)
+    Func(Box<DataType>, Vec<DataType>),
 }
 
 #[derive(Debug)]
