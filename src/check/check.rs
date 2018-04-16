@@ -1,38 +1,39 @@
-use check::{Check, SemanticError, Frame, Context};
-use check::{UncheckedExprInfo, CheckedExprInfo};
-use check::{UncheckedStmtInfo, CheckedStmtInfo};
-use ast::{Program, Stmt, Expr};
+use check::{SemanticError, Context};
+use check::{Unchecked, Checked};
+use ast::{Program, Stmt, StmtKind, Expr};
 
-impl Check for Program<UncheckedStmtInfo> {
-    type Target = Program<CheckedStmtInfo>;
+fn check_stmts<'s>(unchecked: Vec<Stmt<Unchecked>>, ctx: &mut Context<'s>) -> Result<Vec<Stmt<Checked>>, SemanticError> {
+    ctx.forward_declare(&unchecked)?;
 
-    fn check<'s>(self, ctx: &mut Context<'s>) -> Result<Self::Target, SemanticError> {
-        ctx.forward_insert(&self.stmts)?;
+    let mut checked = Vec::new();
 
-        let mut stmts = Vec::new();
+    for stmt in unchecked.into_iter() {
+        checked.push(stmt.check(ctx)?);
+    }
 
-        for stmt in self.stmts.into_iter() {
-            stmts.push(stmt.check(ctx)?);
+    Ok(checked)
+}
+
+impl Program<Unchecked> {
+    pub fn check<'s>(self, ctx: &mut Context<'s>) -> Result<Program<Checked>, SemanticError> {
+        Ok(Program::new(check_stmts(self.stmts, ctx)?))
+    }
+}
+
+impl Stmt<Unchecked> {
+    pub fn check<'s>(self, ctx: &mut Context<'s>) -> Result<Stmt<Checked>, SemanticError> {
+        match self.kind {
+            StmtKind::Compound(stmts) => {
+                let stmts = check_stmts(stmts, &mut ctx.enter())?;
+                Ok(Stmt::new(StmtKind::Compound(stmts)))
+            },
+            _ => Err(SemanticError::Redefinition("WIP".into()))
         }
-
-        Ok(Program {
-            stmts
-        })
     }
 }
 
-impl Check for Stmt<UncheckedStmtInfo> {
-    type Target = Stmt<CheckedStmtInfo>;
-
-    fn check<'s>(self, ctx: &mut Context<'s>) -> Result<Self::Target, SemanticError> {
-        Err(SemanticError::Redefinition("test".into()))
-    }
-}
-
-impl Check for Expr<UncheckedExprInfo> {
-    type Target = Expr<CheckedExprInfo>;
-
-    fn check<'s>(self, ctx: &mut Context<'s>) -> Result<Self::Target, SemanticError> {
-        Err(SemanticError::Redefinition("test".into()))
+impl Expr<Unchecked> {
+    pub fn check<'s>(self, ctx: &mut Context<'s>) -> Result<Expr<Checked>, SemanticError> {
+        Err(SemanticError::Redefinition("WIP".into()))
     }
 }

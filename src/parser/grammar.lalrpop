@@ -10,7 +10,7 @@ Box<T>: Box<T> = T => Box::new(<>);
 
 Binary<Op, Next>: Expr = {
     <lhs:Box<Binary<Op, Next>>> <o:Op> <rhs:Box<Next>>
-        => Expr::new(ExprKind::Binary(o, lhs, rhs)),
+        => Expr::unchecked(ExprKind::Binary(o, lhs, rhs)),
     Next
 };
 
@@ -81,7 +81,7 @@ Expr = Declaration;
 
 Declaration: Expr = {
     <field:Field> <val:("=" <Box<Declaration>>)?>
-        => Expr::new(ExprKind::Decl(field, val)),
+        => Expr::unchecked(ExprKind::Decl(field, val)),
     Assignment
 };
 
@@ -91,7 +91,7 @@ AssignmentKind: BinOpKind = "="
 
 Cast = {
     <lhs:Box<Cast>> "as" <dt:DataType>
-        => Expr::new(ExprKind::Cast(lhs, dt)),
+        => Expr::unchecked(ExprKind::Cast(lhs, dt)),
     Sum
 };
 
@@ -110,7 +110,7 @@ FactorKind: BinOpKind = {
 
 Unary = {
     <o:UnaryKind> <rhs:Box<Unary>>
-        => Expr::new(ExprKind::Unary(o, rhs)),
+        => Expr::unchecked(ExprKind::Unary(o, rhs)),
     PostfixExpr
 };
 
@@ -124,16 +124,16 @@ UnaryKind: UnOpKind = {
 
 PostfixExpr: Expr = {
     <lhs:Box<PostfixExpr>> "(" <params:OptList<Expr>> ")"
-        => Expr::new(ExprKind::Call(lhs, params)),
+        => Expr::unchecked(ExprKind::Call(lhs, params)),
     <lhs:Box<PostfixExpr>> "[" <rhs:Box<Expr>> "]"
-        => Expr::new(ExprKind::Subscript(lhs, rhs)),
+        => Expr::unchecked(ExprKind::Subscript(lhs, rhs)),
     Atom
 };
 
 Atom: Expr = {
-    Literal => Expr::new(ExprKind::Literal(<>)),
+    Literal => Expr::unchecked(ExprKind::Literal(<>)),
     "(" <Expr> ")",
-    Ident => Expr::new(ExprKind::Name(<>))
+    Ident => Expr::unchecked(ExprKind::Name(<>))
 };
 
 Literal: Literal = {

@@ -9,50 +9,26 @@ use std::fmt;
 use ast::Name;
 use datatype::DataType;
 
-pub trait StmtInfo {
-    type ExprInfo: ExprInfo;
+pub trait CheckType {
+    type ExprInfo;
 }
 
-pub struct CheckedStmtInfo {}
+pub struct Checked {}
 
-impl StmtInfo for CheckedStmtInfo {
-    type ExprInfo = CheckedExprInfo;
+impl CheckType for Checked {
+    type ExprInfo = DataType;
 }
 
-pub struct UncheckedStmtInfo {}
+pub struct Unchecked {}
 
-impl Default for UncheckedStmtInfo {
+impl CheckType for Unchecked {
+    type ExprInfo = ();
+}
+
+impl Default for Unchecked {
     fn default() -> Self {
-        UncheckedStmtInfo {}
+        Unchecked {}
     }
-}
-
-impl StmtInfo for UncheckedStmtInfo {
-    type ExprInfo = UncheckedExprInfo;
-}
-
-pub trait ExprInfo {}
-
-pub struct UncheckedExprInfo {}
-
-impl ExprInfo for UncheckedExprInfo {}
-
-impl Default for UncheckedExprInfo {
-    fn default() -> Self {
-        UncheckedExprInfo {}
-    }
-}
-
-pub struct CheckedExprInfo {
-    datatype: DataType
-}
-
-impl ExprInfo for CheckedExprInfo {}
-
-pub trait Check {
-    type Target;
-
-    fn check<'s>(self, ctx: &mut Context<'s>) -> Result<Self::Target, SemanticError>;
 }
 
 #[derive(Debug)]

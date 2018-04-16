@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use check::SemanticError;
 use check::scoped::{Scoped, Iter as ScopeIter};
-use datatype::{DataType, Field, Struct};
+use datatype::{DataType, Struct};
 use ast::{Name, Stmt, StmtKind};
 
 pub struct Frame {
@@ -39,21 +39,21 @@ impl<'s> Context<'s> {
         self.scope.iter()
     }
 
-    pub fn insert_binding(&mut self, name: &Name, dt: DataType) -> Result<(), SemanticError> {
+    pub fn declare_binding(&mut self, name: &Name, dt: DataType) -> Result<(), SemanticError> {
         match self.scope.item_mut().bindings.insert(name.clone(), dt) {
             Some(_) => Err(SemanticError::Redefinition(name.clone())),
             None => Ok(())
         }
     }
 
-    pub fn insert_struct(&mut self, name: &Name, dt: Struct) -> Result<(), SemanticError> {
+    pub fn declare_struct(&mut self, name: &Name, dt: Struct) -> Result<(), SemanticError> {
         match self.scope.item_mut().structs.insert(name.clone(), dt) {
             Some(_) => Err(SemanticError::Redefinition(name.clone())),
             None => Ok(())
         }
     }
 
-    pub fn get_binding(&self, name: &Name) -> Option<&DataType> {
+    pub fn lookup_binding(&self, name: &Name) -> Option<&DataType> {
         for scope in self.iter() {
             if let Some(dt) = scope.bindings.get(name) {
                 return Some(dt);
@@ -63,7 +63,7 @@ impl<'s> Context<'s> {
         None
     }
 
-    pub fn get_struct(&self, name: &Name) -> Option<&Struct> {
+    pub fn lookup_struct(&self, name: &Name) -> Option<&Struct> {
         for scope in self.iter() {
             if let Some(dt) = scope.structs.get(name) {
                 return Some(dt);
@@ -74,15 +74,15 @@ impl<'s> Context<'s> {
     }
 
     // forward insert type and function definitions
-    pub fn forward_insert(&mut self, stmts: &Vec<Stmt>) -> Result<(), SemanticError> {
+    pub fn forward_declare(&mut self, stmts: &Vec<Stmt>) -> Result<(), SemanticError> {
         for stmt in stmts {
             match stmt.kind {
                 StmtKind::FuncDecl(ref name, ref rt, ref params, _) => {
                     let params = params.into_iter().map(|field| &field.0).cloned().collect();
-                    self.insert_binding(name, DataType::Func(Box::new(rt.clone()), params))?;
+                    self.declare_binding(name, DataType::Func(Box::new(rt.clone()), params))?;
                 },
                 StmtKind::StructDecl(ref name, ref fields) => {
-                    self.insert_struct(name, Struct::new(fields.to_vec()))?;
+                    self.declare_struct(name, Struct::new(fields.to_vec()))?;
                 },
                 _ => {}
             }

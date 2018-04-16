@@ -1,8 +1,6 @@
-func aaa() -> u8 = 10;
-
 *a = 1 + 2 * 3;
 
-func aaa() -> u16 {
+func test() -> u16 {
     a: u16* = 10;
     b: u8 = c: u8 = d = 11;
     e: u8;

@@ -12,7 +12,7 @@ mod datatype;
 use std::str::from_utf8;
 use parser::Parser;
 use parser::lexer::Lexer;
-use check::{Context, Check};
+use check::Context;
 
 fn main() {
     let program = from_utf8(include_bytes!("test.an")).unwrap();

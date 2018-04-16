@@ -1,33 +1,40 @@
 use std::default::Default;
 use datatype::{DataType, Field};
-use check::{ExprInfo, UncheckedExprInfo};
+use check::{CheckType, Unchecked};
 use ast::Name;
 
-pub struct Expr<I = UncheckedExprInfo>
-where I: ExprInfo {
-    pub kind: ExprKind<I>,
-    pub check: I
+pub struct Expr<C = Unchecked>
+where C: CheckType {
+    pub kind: ExprKind<C>,
+    pub info: C::ExprInfo
 }
 
-impl Expr<UncheckedExprInfo> {
-    pub fn new(kind: ExprKind<UncheckedExprInfo>) -> Self {
+impl<C> Expr<C>
+where C: CheckType {
+    pub fn new(kind: ExprKind<C>, info: C::ExprInfo) -> Self {
         Expr {
             kind,
-            check: Default::default()
+            info
         }
     }
 }
 
-pub enum ExprKind<I = UncheckedExprInfo>
-where I: ExprInfo {
-    Binary(BinOpKind, Box<Expr<I>>, Box<Expr<I>>),
-    Unary(UnOpKind, Box<Expr<I>>),
-    Call(Box<Expr<I>>, Vec<Expr<I>>),
-    Subscript(Box<Expr<I>>, Box<Expr<I>>),
-    Cast(Box<Expr<I>>, DataType),
+impl Expr<Unchecked> {
+    pub fn unchecked(kind: ExprKind<Unchecked>) -> Self {
+        Expr::new(kind, Default::default())
+    }
+}
+
+pub enum ExprKind<C = Unchecked>
+where C: CheckType {
+    Binary(BinOpKind, Box<Expr<C>>, Box<Expr<C>>),
+    Unary(UnOpKind, Box<Expr<C>>),
+    Call(Box<Expr<C>>, Vec<Expr<C>>),
+    Subscript(Box<Expr<C>>, Box<Expr<C>>),
+    Cast(Box<Expr<C>>, DataType),
     Literal(Literal),
     Name(Name),
-    Decl(Field, Option<Box<Expr<I>>>),
+    Decl(Field, Option<Box<Expr<C>>>),
 }
 
 #[derive(Debug)]
