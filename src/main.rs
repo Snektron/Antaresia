@@ -12,7 +12,7 @@ mod datatype;
 use std::str::from_utf8;
 use parser::Parser;
 use parser::lexer::Lexer;
-use check::{TypeChecker, Check};
+use check::{Context, Check};
 
 fn main() {
     let program = from_utf8(include_bytes!("test.an")).unwrap();
@@ -24,7 +24,7 @@ fn main() {
 
     ::ast::print(&ast);
 
-    let ast = ast.check(&mut TypeChecker::new());
+    let ast = ast.check(&mut Context::new());
 
     println!("------");
 

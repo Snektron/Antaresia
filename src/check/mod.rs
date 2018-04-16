@@ -1,11 +1,13 @@
 pub mod scoped;
-pub mod scoped_map;
-pub mod typecheck;
+pub mod context;
+mod check;
 
-pub use self::typecheck::{TypeChecker, Check};
+pub use self::context::{Context, Frame};
 
+use std::error::Error;
+use std::fmt;
+use ast::Name;
 use datatype::DataType;
-use std::default::Default;
 
 pub trait StmtInfo {
     type ExprInfo: ExprInfo;
@@ -46,3 +48,32 @@ pub struct CheckedExprInfo {
 }
 
 impl ExprInfo for CheckedExprInfo {}
+
+pub trait Check {
+    type Target;
+
+    fn check<'s>(self, ctx: &mut Context<'s>) -> Result<Self::Target, SemanticError>;
+}
+
+#[derive(Debug)]
+pub enum SemanticError {
+    Redefinition(Name)
+}
+
+impl Error for SemanticError {
+    fn description(&self) -> &'static str {
+        match *self {
+            SemanticError::Redefinition(_) => "redefinition error"
+        }
+    }
+}
+
+impl fmt::Display for SemanticError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            SemanticError::Redefinition(ref name)
+                => write!(f, "Redefinition error: '{}' is already defined.", name)
+        }
+    }
+}
+

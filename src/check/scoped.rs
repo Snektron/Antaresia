@@ -1,43 +1,62 @@
 use std::iter::Iterator;
+use std::default::Default;
 
-struct Scoped<T> {
-    prev: Option<Box<Scoped<T>>>,
-    inner: T
+pub struct Scoped<'a, T>
+where T: 'a {
+    next: Option<&'a Scoped<'a, T>>,
+    item: T
 }
 
-impl Scoped<T> {
-    pub fn new() -> Self {
+impl<'a, T> Scoped<'a, T> {
+    pub fn new(item: T) -> Self {
         Scoped {
-            prev: None
+            next: None,
+            item
         }
     }
 
-    pub fn enter(self) -> Self {
+    pub fn enter_with<'b>(&'b self, item: T) -> Scoped<'b, T> {
         Scoped {
-            prev: Some(self)
+            next: Some(self),
+            item
         }
     }
 
-    pub fn exit(self) -> Self {
-        self.prev
+    pub fn item(&self) -> &T {
+        &self.item
     }
 
-    pub fn iter<'a>(&'a self) -> Iter<'a, T> {
+    pub fn item_mut(&mut self) -> &mut T {
+        &mut self.item
+    }
 
+    pub fn iter<'b>(&'b self) -> Iter<'b, T> {
+        Iter {
+            current: Some(self)
+        }
     }
 }
 
-struct Iter<'a, T> {
-    current: Option<&'a Scoped<T>>
+impl<'a, T> Scoped<'a, T>
+where T: Default {
+    pub fn enter<'b>(&'b self) -> Scoped<'b, T> {
+        self.enter_with(Default::default())
+    }
 }
 
-impl<'a, T> Iterator for Iter<'a, T> {
+pub struct Iter<'a, T>
+where T: 'a {
+    current: Option<&'a Scoped<'a, T>>
+}
+
+impl<'a, T> Iterator for Iter<'a, T>
+where T: 'a {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(current) = self.current {
-            self.current = &current.prev;
-            Some(current)
+            self.current = current.next;
+            Some(&current.item)
         } else {
             None
         }
