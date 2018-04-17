@@ -1,16 +1,19 @@
 use ast::{Name, DataType, Field};
 use check::{CheckType, Unchecked};
+use parser::Span;
 
 pub struct Expr<C = Unchecked>
 where C: CheckType {
+    pub span: Span,
     pub kind: ExprKind<C>,
     pub info: C::ExprInfo
 }
 
 impl<C> Expr<C>
 where C: CheckType {
-    pub fn new(kind: ExprKind<C>, info: C::ExprInfo) -> Self {
+    pub fn new(span: Span, kind: ExprKind<C>, info: C::ExprInfo) -> Self {
         Expr {
+            span,
             kind,
             info
         }
@@ -18,8 +21,8 @@ where C: CheckType {
 }
 
 impl Expr<Unchecked> {
-    pub fn unchecked(kind: ExprKind<Unchecked>) -> Self {
-        Expr::new(kind, ())
+    pub fn unchecked(span: Span, kind: ExprKind<Unchecked>) -> Self {
+        Expr::new(span, kind, ())
     }
 }
 

@@ -1,12 +1,13 @@
 use std::collections::HashMap;
-use check::SemanticError;
+use check::{CheckResult, SemanticError, SemanticErrorKind};
 use check::scoped::{Scoped, Iter as ScopeIter};
 use ast::{DataType, Field};
 use ast::Name;
+use parser::Span;
 
 pub struct Frame {
     bindings: HashMap<Name, DataType>,
-    structs: HashMap<Name, Vec<Field>>
+    structs: HashMap<Name, (Span, Vec<Field>)>
 }
 
 impl Frame {
@@ -39,16 +40,18 @@ impl<'s> Context<'s> {
         self.scope.iter()
     }
 
-    pub fn declare_binding(&mut self, name: &Name, dt: DataType) -> Result<(), SemanticError> {
+    pub fn declare_binding(&mut self, name: &Name, dt: DataType) -> CheckResult<()> {
+        let span = dt.span.clone();
+
         match self.scope.item_mut().bindings.insert(name.clone(), dt) {
-            Some(_) => Err(SemanticError::Redefinition(name.clone())),
+            Some(ref original) => Err(SemanticError::new(span, SemanticErrorKind::Redefinition(original.span.clone(), name.clone()))),
             None => Ok(())
         }
     }
 
-    pub fn declare_struct(&mut self, name: &Name, fields: Vec<Field>) -> Result<(), SemanticError> {
-        match self.scope.item_mut().structs.insert(name.clone(), fields) {
-            Some(_) => Err(SemanticError::Redefinition(name.clone())),
+    pub fn declare_struct(&mut self, name: &Name, span: Span, fields: Vec<Field>) -> CheckResult<()> {
+        match self.scope.item_mut().structs.insert(name.clone(), (span.clone(), fields)) {
+            Some((origin, _)) => Err(SemanticError::new(span, SemanticErrorKind::Redefinition(origin.clone(), name.clone()))),
             None => Ok(())
         }
     }
@@ -65,8 +68,8 @@ impl<'s> Context<'s> {
 
     pub fn lookup_struct(&self, name: &Name) -> Option<&Vec<Field>> {
         for scope in self.iter() {
-            if let Some(dt) = scope.structs.get(name) {
-                return Some(dt);
+            if let Some(fields) = scope.structs.get(name) {
+                return Some(&fields.1);
             }
         }
 

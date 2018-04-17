@@ -6,18 +6,21 @@ pub use self::expr::{Expr, ExprKind, Literal, BinOpKind, UnOpKind};
 pub use self::datatype::{DataType, DataTypeKind, Field};
 
 use check::{CheckType, Unchecked};
+use parser::Span;
 
 pub type Name = String;
 
 pub struct Program<C = Unchecked>
 where C: CheckType {
+    pub span: Span,
     pub stmts: Vec<Stmt<C>>
 }
 
 impl<C> Program<C>
 where C: CheckType {
-    pub fn new(stmts: Vec<Stmt<C>>) -> Self {
+    pub fn new(span: Span, stmts: Vec<Stmt<C>>) -> Self {
         Program {
+            span,
             stmts
         }
     }
@@ -25,13 +28,15 @@ where C: CheckType {
 
 pub struct Stmt<C = Unchecked>
 where C: CheckType {
+    pub span: Span,
     pub kind: StmtKind<C>,
 }
 
 impl<C> Stmt<C>
 where C: CheckType {
-    pub fn new(kind: StmtKind<C>) -> Self {
+    pub fn new(span: Span, kind: StmtKind<C>) -> Self {
         Stmt {
+            span,
             kind
         }
     }

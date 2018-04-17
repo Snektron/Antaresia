@@ -1,7 +1,7 @@
 mod grammar;
 pub mod lexer;
 pub mod token;
-pub mod location;
+pub mod span;
 
 pub use self::grammar::ProgramParser as Parser;
-pub use self::location::Location;
+pub use self::span::Span;

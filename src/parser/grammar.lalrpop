@@ -2,15 +2,15 @@ use ast::{Program, Stmt, StmtKind};
 use ast::{BinOpKind, UnOpKind};
 use ast::{Expr, ExprKind, Literal};
 use ast::{DataType, DataTypeKind, Field};
-use parser::{lexer, location, token};
+use parser::{lexer, span, token, Span};
 
 grammar;
 
 Box<T>: Box<T> = T => Box::new(<>);
 
 Binary<Op, Next>: Expr = {
-    <lhs:Box<Binary<Op, Next>>> <o:Op> <rhs:Box<Next>>
-        => Expr::unchecked(ExprKind::Binary(o, lhs, rhs)),
+    <lo:@L> <lhs:Box<Binary<Op, Next>>> <o:Op> <rhs:Box<Next>> <hi:@R>
+        => Expr::unchecked(Span(lo, hi), ExprKind::Binary(o, lhs, rhs)),
     Next
 };
 
@@ -24,8 +24,8 @@ List<T>: Vec<T> = <a:(<T> ",")*> <b:T>
 OptList<T>: Vec<T> = List<T>?
     => <>.unwrap_or(Vec::new());
 
-pub Program: Program = Stmt*
-    => Program::new(<>);
+pub Program: Program = <lo:@L> <v:Stmt*> <hi:@R>
+    => Program::new(Span(lo, hi), v);
 
 Stmt: Stmt = {
     CompoundStmt,
@@ -33,41 +33,44 @@ Stmt: Stmt = {
     WhileStmt,
     FnDeclStmt,
     StructDeclStmt,
-    <ShortFnDeclStmt> ";",
-    <ReturnStmt> ";",
-    <Box<Expr>> ";"
-        => Stmt::new(StmtKind::Expr(<>))
+    ShortFnDeclStmt,
+    ReturnStmt,
+    <lo:@L> <e:Box<Expr>> ";" <hi:@R>
+        => Stmt::new(Span(lo, hi), StmtKind::Expr(e))
 };
 
-CompoundStmt: Stmt = "{" <Stmt*> "}"
-    => Stmt::new(StmtKind::Compound(<>));
+CompoundStmt: Stmt = <lo:@L> "{" <v:Stmt*> "}" <hi:@R>
+    => Stmt::new(Span(lo, hi), StmtKind::Compound(v));
 
-WhileStmt: Stmt = "while" <cond:Box<Expr>> <csq:Box<CompoundStmt>>
-    => Stmt::new(StmtKind::While(cond, csq));
+WhileStmt: Stmt = <lo:@L> "while" <cond:Box<Expr>> <csq:Box<CompoundStmt>> <hi:@R>
+    => Stmt::new(Span(lo, hi), StmtKind::While(cond, csq));
 
-IfStmt: Stmt = "if" <cond:Box<Expr>> <csq:Box<CompoundStmt>> <alt:("else" <Box<IfOrBlock>>)?>
-    => Stmt::new(StmtKind::If(cond, csq, alt));
+IfStmt: Stmt = <lo:@L> "if" <cond:Box<Expr>> <csq:Box<CompoundStmt>> <alt:("else" <Box<IfOrBlock>>)?> <hi:@R>
+    => Stmt::new(Span(lo, hi), StmtKind::If(cond, csq, alt));
 
 IfOrBlock = {
     CompoundStmt,
     IfStmt
 };
 
-ReturnStmt: Stmt = "return" <Box<Expr>>
-    => Stmt::new(StmtKind::Return(<>));
+ReturnStmt: Stmt = <lo:@L> "return" <e:Box<Expr>> ";" <hi:@L>
+    => Stmt::new(Span(lo, hi), StmtKind::Return(e));
 
-FnDeclStmt: Stmt = "func" <name:Ident> "(" <params:OptList<FieldList>> ")" <rtype:("->" <Box<DataType>>)?> <body:Box<CompoundStmt>>
+FnDeclStmt: Stmt = <lo:@L> "func" <name:Ident> "(" <params:OptList<FieldList>> ")" <rlo:@L>
+                   <rtype:("->" <Box<DataType>>)?> <rhi:@R> <body:Box<CompoundStmt>> <hi:@R>
     => {
         let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
-        let rtype = rtype.unwrap_or(Box::new(DataType::new(DataTypeKind::Void)));
-        Stmt::new(StmtKind::FuncDecl(name, rtype, params, body))
+        let rtype = rtype.unwrap_or(Box::new(DataType::new(Span(rlo, rhi), DataTypeKind::Void)));
+        Stmt::new(Span(lo, hi), StmtKind::FuncDecl(name, rtype, params, body))
     };
 
-ShortFnDeclStmt: Stmt = "func" <name:Ident> "(" <params:OptList<FieldList>> ")" <rtype:("->" <Box<DataType>>)?> "=" <body:Box<Expr>>
+ShortFnDeclStmt: Stmt = <lo:@L> "func" <name:Ident> "(" <params:OptList<FieldList>> ")" <rlo:@L>
+                        <rtype:("->" <Box<DataType>>)?> <rhi:@R> <blo:@L> "=" <body:Box<Expr>> ";" <hi:@R>
     => {
         let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
-        let rtype = rtype.unwrap_or(Box::new(DataType::new(DataTypeKind::Void)));
-        Stmt::new(StmtKind::FuncDecl(name, rtype, params, Box::new(Stmt::new(StmtKind::Return(body)))))
+        let rtype = rtype.unwrap_or(Box::new(DataType::new(Span(rlo, rhi), DataTypeKind::Void)));
+        let rstmt = Box::new(Stmt::new(Span(blo, hi.clone()), StmtKind::Return(body)));
+        Stmt::new(Span(lo, hi), StmtKind::FuncDecl(name, rtype, params, rstmt))
     };
 
 Field: Field = <i:Ident> ":" <t:DataType>
@@ -76,14 +79,14 @@ Field: Field = <i:Ident> ":" <t:DataType>
 FieldList: Vec<Field> = <is:List<Ident>> ":" <t:DataType>
     => is.into_iter().map(|i| Field::new(i, t.clone())).collect();
 
-StructDeclStmt: Stmt = "struct" <name:Ident> "{" <fields:(<FieldList> ";")+> "}"
-    => Stmt::new(StmtKind::StructDecl(name, fields.into_iter().flat_map(|x| x.into_iter()).collect()));
+StructDeclStmt: Stmt = <lo:@L> "struct" <name:Ident> "{" <fields:(<FieldList> ";")+> "}" <hi:@R>
+    => Stmt::new(Span(lo, hi), StmtKind::StructDecl(name, fields.into_iter().flat_map(|x| x.into_iter()).collect()));
 
 Expr = Declaration;
 
 Declaration: Expr = {
-    <field:Field> <val:("=" <Box<Declaration>>)?>
-        => Expr::unchecked(ExprKind::Decl(field, val)),
+    <lo:@L> <field:Field> <val:("=" <Box<Declaration>>)?> <hi:@R>
+        => Expr::unchecked(Span(lo, hi), ExprKind::Decl(field, val)),
     Assignment
 };
 
@@ -92,8 +95,8 @@ AssignmentKind: BinOpKind = "="
     => BinOpKind::Assign;
 
 Cast = {
-    <lhs:Box<Cast>> "as" <dt:DataType>
-        => Expr::unchecked(ExprKind::Cast(lhs, dt)),
+    <lo:@L> <lhs:Box<Cast>> "as" <dt:DataType> <hi:@R>
+        => Expr::unchecked(Span(lo, hi), ExprKind::Cast(lhs, dt)),
     Sum
 };
 
@@ -111,8 +114,8 @@ FactorKind: BinOpKind = {
 };
 
 Unary = {
-    <o:UnaryKind> <rhs:Box<Unary>>
-        => Expr::unchecked(ExprKind::Unary(o, rhs)),
+    <lo:@L> <o:UnaryKind> <rhs:Box<Unary>> <hi:@R>
+        => Expr::unchecked(Span(lo, hi), ExprKind::Unary(o, rhs)),
     PostfixExpr
 };
 
@@ -125,17 +128,17 @@ UnaryKind: UnOpKind = {
 };
 
 PostfixExpr: Expr = {
-    <lhs:Box<PostfixExpr>> "(" <params:OptList<Expr>> ")"
-        => Expr::unchecked(ExprKind::Call(lhs, params)),
-    <lhs:Box<PostfixExpr>> "[" <rhs:Box<Expr>> "]"
-        => Expr::unchecked(ExprKind::Subscript(lhs, rhs)),
+    <lo:@L> <lhs:Box<PostfixExpr>> "(" <params:OptList<Expr>> ")" <hi:@R>
+        => Expr::unchecked(Span(lo, hi), ExprKind::Call(lhs, params)),
+    <lo:@L> <lhs:Box<PostfixExpr>> "[" <rhs:Box<Expr>> "]" <hi:@R>
+        => Expr::unchecked(Span(lo, hi), ExprKind::Subscript(lhs, rhs)),
     Atom
 };
 
 Atom: Expr = {
-    Literal => Expr::unchecked(ExprKind::Literal(<>)),
+    <lo:@L> <l:Literal> <hi:@R> => Expr::unchecked(Span(lo, hi), ExprKind::Literal(l)),
     "(" <Expr> ")",
-    Ident => Expr::unchecked(ExprKind::Name(<>))
+    <lo:@L> <i:Ident> <hi:@R> => Expr::unchecked(Span(lo, hi), ExprKind::Name(i))
 };
 
 Literal: Literal = {
@@ -143,24 +146,24 @@ Literal: Literal = {
 };
 
 DataType: DataType = {
-    "func" "(" <params:OptList<DataType>> ")" <rtype:("->" <Box<DataType>>)?>
+    <lo:@L> "func" "(" <params:OptList<DataType>> ")" <rlo:@L> <rtype:("->" <Box<DataType>>)?> <hi:@R>
         => {
-            let rtype = rtype.unwrap_or(Box::new(DataType::new(DataTypeKind::Void)));
-            DataType::new(DataTypeKind::Func(rtype, params))
+            let rtype = rtype.unwrap_or(Box::new(DataType::new(Span(rlo, hi.clone()), DataTypeKind::Void)));
+            DataType::new(Span(lo, hi), DataTypeKind::Func(rtype, params))
         },
     DataTypePtr
 };
 
 DataTypePtr: DataType = {
-    <Box<DataTypePtr>> "*" => DataType::new(DataTypeKind::Ptr(<>)),
+    <lo:@L> <ptr:Box<DataTypePtr>> <hi:@R> "*" => DataType::new(Span(lo, hi), DataTypeKind::Ptr(ptr)),
     DataTypeAtom
 };
 
 DataTypeAtom: DataType = {
-    "u8" => DataType::new(DataTypeKind::U8),
-    "void" => DataType::new(DataTypeKind::Void),
-    Ident => DataType::new(DataTypeKind::Alias(<>)),
-    "(" <Box<DataType>> ")" => DataType::new(DataTypeKind::Paren(<>)),
+    <lo:@L> "u8" <hi:@L> => DataType::new(Span(lo, hi), DataTypeKind::U8),
+    <lo:@L> "void" <hi:@R> => DataType::new(Span(lo, hi), DataTypeKind::Void),
+    <lo:@L> <i:Ident> <hi:@R> => DataType::new(Span(lo, hi), DataTypeKind::Alias(i)),
+    <lo:@L> "(" <ptr:Box<DataType>> ")" <hi:@R> => DataType::new(Span(lo, hi), DataTypeKind::Paren(ptr)),
 };
 
 Integer: i64 = "INTEGER"
@@ -177,7 +180,7 @@ Ident: String = "IDENT"
 
 
 extern {
-    type Location = location::Location;
+    type Location = span::Location;
     type Error = lexer::UnexpectedCharError;
 
     enum token::Token {

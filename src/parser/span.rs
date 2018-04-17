@@ -1,7 +1,7 @@
 use std::default::Default;
 use std::fmt;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Location {
     line: usize,
     col: usize
@@ -25,10 +25,25 @@ impl fmt::Display for Location {
 }
 
 impl Default for Location {
-    fn default() -> Location {
+    fn default() -> Self {
         Location {
             line: 0,
             col: 0
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Span(pub Location, pub Location);
+
+impl fmt::Display for Span {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}:{}", self.0, self.1)
+    }
+}
+
+impl Default for Span {
+    fn default() -> Self {
+        Span(Default::default(), Default::default())
     }
 }

@@ -3,18 +3,21 @@ use std::fmt;
 use ast::Name;
 use check::{CheckType, Unchecked};
 use utility;
+use parser::Span;
 
 #[derive(Clone)]
 pub struct DataType<C = Unchecked>
 where C: CheckType {
+    pub span: Span,
     pub kind: DataTypeKind<C>,
     _checktype: PhantomData<C>
 }
 
 impl<C> DataType<C>
 where C: CheckType {
-    pub fn new(kind: DataTypeKind<C>) -> Self {
+    pub fn new(span: Span, kind: DataTypeKind<C>) -> Self {
         DataType {
+            span,
             kind,
             _checktype: PhantomData
         }

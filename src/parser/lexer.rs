@@ -6,7 +6,7 @@ use std::fmt;
 use phf::Map;
 use phf_builder::Map as MapBuilder;
 use parser::token::Token;
-use parser::location::Location;
+use parser::span::Location;
 
 lazy_static! {
     static ref KEYWORDS: Map<&'static str, Token> = {

@@ -2,6 +2,10 @@ func a(a: u8) {
 
 }
 
+func a() {
+    
+}
+
 *a = 1 + 2 * 3;
 
 func test() -> u16 {
