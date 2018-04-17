@@ -7,39 +7,37 @@ pub use self::context::{Context, Frame};
 use std::error::Error;
 use std::fmt;
 use ast::Name;
-use datatype::DataType;
+use ast::DataType;
 
 pub trait CheckType {
     type ExprInfo;
 }
 
-pub struct Checked {}
+#[derive(Clone)]
+pub struct Checked;
 
 impl CheckType for Checked {
     type ExprInfo = DataType;
 }
 
-pub struct Unchecked {}
+#[derive(Clone)]
+pub struct Unchecked;
 
 impl CheckType for Unchecked {
     type ExprInfo = ();
 }
 
-impl Default for Unchecked {
-    fn default() -> Self {
-        Unchecked {}
-    }
-}
-
 #[derive(Debug)]
 pub enum SemanticError {
-    Redefinition(Name)
+    Redefinition(Name),
+    OutOfScope(Name)
 }
 
 impl Error for SemanticError {
     fn description(&self) -> &'static str {
         match *self {
-            SemanticError::Redefinition(_) => "redefinition error"
+            SemanticError::Redefinition(_) => "redefinition error",
+            SemanticError::OutOfScope(_) => "out-of-scope error"
         }
     }
 }
@@ -48,7 +46,9 @@ impl fmt::Display for SemanticError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             SemanticError::Redefinition(ref name)
-                => write!(f, "Redefinition error: '{}' is already defined.", name)
+                => write!(f, "Redefinition error: '{}' is already defined.", name),
+            SemanticError::OutOfScope(ref name)
+                => write!(f, "Out-of-scope error: '{}' was not found in this.", name)
         }
     }
 }

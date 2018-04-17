@@ -7,12 +7,13 @@ extern crate lazy_static;
 mod ast;
 mod parser;
 mod check;
-mod datatype;
+mod utility;
 
 use std::str::from_utf8;
 use parser::Parser;
 use parser::lexer::Lexer;
 use check::Context;
+use ast::print::Printer;
 
 fn main() {
     let program = from_utf8(include_bytes!("test.an")).unwrap();
@@ -22,14 +23,14 @@ fn main() {
         Err(err) => panic!("{}", err)
     };
 
-    ::ast::print(&ast);
+    ast.print(&mut Printer::new());
 
     let ast = ast.check(&mut Context::new());
 
     println!("------");
 
     match ast {
-        Ok(ast) => ::ast::print(&ast),
+        Ok(ast) => ast.print(&mut Printer::new()),
         Err(err) => println!("{}", err)
     }
 }

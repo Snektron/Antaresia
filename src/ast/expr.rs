@@ -1,7 +1,5 @@
-use std::default::Default;
-use datatype::{DataType, Field};
+use ast::{Name, DataType, Field};
 use check::{CheckType, Unchecked};
-use ast::Name;
 
 pub struct Expr<C = Unchecked>
 where C: CheckType {
@@ -21,7 +19,7 @@ where C: CheckType {
 
 impl Expr<Unchecked> {
     pub fn unchecked(kind: ExprKind<Unchecked>) -> Self {
-        Expr::new(kind, Default::default())
+        Expr::new(kind, ())
     }
 }
 
@@ -31,7 +29,7 @@ where C: CheckType {
     Unary(UnOpKind, Box<Expr<C>>),
     Call(Box<Expr<C>>, Vec<Expr<C>>),
     Subscript(Box<Expr<C>>, Box<Expr<C>>),
-    Cast(Box<Expr<C>>, DataType),
+    Cast(Box<Expr<C>>, DataType<C>),
     Literal(Literal),
     Name(Name),
     Decl(Field, Option<Box<Expr<C>>>),

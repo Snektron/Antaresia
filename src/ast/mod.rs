@@ -1,10 +1,10 @@
 pub mod print;
 pub mod expr;
+pub mod datatype;
 
 pub use self::expr::{Expr, ExprKind, Literal, BinOpKind, UnOpKind};
-pub use self::print::print;
+pub use self::datatype::{DataType, DataTypeKind, Field};
 
-use datatype::{DataType, Field};
 use check::{CheckType, Unchecked};
 
 pub type Name = String;
@@ -44,6 +44,6 @@ where C: CheckType {
     While(Box<Expr<C>>, Box<Stmt<C>>),
     Return(Box<Expr<C>>),
     Expr(Box<Expr<C>>),
-    FuncDecl(Name, DataType, Vec<Field>, Box<Stmt<C>>),
-    StructDecl(Name, Vec<Field>)
+    FuncDecl(Name, Box<DataType<C>>, Vec<Field<C>>, Box<Stmt<C>>),
+    StructDecl(Name, Vec<Field<C>>)
 }

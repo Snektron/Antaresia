@@ -3,15 +3,6 @@ use std::cmp;
 use ast::{Program, Stmt, StmtKind, Expr, ExprKind};
 use check::CheckType;
 
-pub fn print<P>(ast: &P)
-where P: Print {
-    ast.print(&mut Printer::new())
-}
-
-pub trait Print {
-    fn print(&self, p: &mut Printer);
-}
-
 pub struct Printer {
     stack: Vec<usize>
 }
@@ -63,9 +54,9 @@ impl Printer {
     }
 }
 
-impl<C> Print for Program<C>
+impl<C> Program<C>
 where C: CheckType {
-    fn print(&self, p: &mut Printer) {
+    pub fn print(&self, p: &mut Printer) {
         p.node(self.stmts.len(), format!("Program(#stmts = {})", self.stmts.len()));
 
         for child in self.stmts.iter() {
@@ -74,9 +65,9 @@ where C: CheckType {
     }
 }
 
-impl<C> Print for Stmt<C>
+impl<C> Stmt<C>
 where C: CheckType {
-    fn print(&self, p: &mut Printer) {
+    pub fn print(&self, p: &mut Printer) {
         match self.kind {
             StmtKind::Compound(ref children) => {
                 p.node(children.len(), format!("Compound(#stmts = {})", children.len()));
@@ -110,10 +101,10 @@ where C: CheckType {
                 expr.print(p);
             },
             StmtKind::FuncDecl(ref name, ref rtype, ref params, ref body) => {
-                p.node(1 + params.len(), format!("FuncDecl({:?} {})", rtype, name));
+                p.node(1 + params.len(), format!("FuncDecl({} -> {})", name, rtype));
 
                 for param in params {
-                    p.leaf(format!("Param({:?} {})", param.0, param.1));
+                    p.leaf(format!("Param({})", param));
                 }
 
                 body.print(p);
@@ -122,16 +113,16 @@ where C: CheckType {
                 p.node(fields.len(), format!("StructDecl({})", name));
 
                 for field in fields {
-                    p.leaf(format!("Member({:?} {})", field.0, field.1));
+                    p.leaf(format!("Member({})", field));
                 }
             }
         }   
     }
 }
 
-impl<C> Print for Expr<C>
+impl<C> Expr<C>
 where C: CheckType {
-    fn print(&self, p: &mut Printer) {
+    pub fn print(&self, p: &mut Printer) {
         match self.kind {
             ExprKind::Binary(ref op, ref lhs, ref rhs) => {
                 p.node(2, format!("Binary(op = {:?})", op));
@@ -156,13 +147,13 @@ where C: CheckType {
                 rhs.print(p);
             },
             ExprKind::Cast(ref lhs, ref dt) => {
-                p.node(1, format!("Cast({:?})", dt));
+                p.node(1, format!("Cast({})", dt));
                 lhs.print(p);
             },
             ExprKind::Literal(ref x) => p.leaf(format!("Literal({:?})", x)),
             ExprKind::Name(ref name) => p.leaf(format!("Name(name = {})", name)),
             ExprKind::Decl(ref field, ref val) => {
-                let text = format!("Decl({:?} {})", field.0, field.1);
+                let text = format!("Decl({})", field);
                 match *val {
                     Some(ref expr) => {
                         p.node(1, text);

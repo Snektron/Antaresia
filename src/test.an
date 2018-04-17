@@ -1,3 +1,7 @@
+func a(a: u8) {
+
+}
+
 *a = 1 + 2 * 3;
 
 func test() -> u16 {

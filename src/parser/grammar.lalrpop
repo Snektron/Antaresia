@@ -1,7 +1,7 @@
 use ast::{Program, Stmt, StmtKind};
 use ast::{BinOpKind, UnOpKind};
 use ast::{Expr, ExprKind, Literal};
-use datatype::{DataType, Field};
+use ast::{DataType, DataTypeKind, Field};
 use parser::{lexer, location, token};
 
 grammar;
@@ -56,23 +56,25 @@ IfOrBlock = {
 ReturnStmt: Stmt = "return" <Box<Expr>>
     => Stmt::new(StmtKind::Return(<>));
 
-FnDeclStmt: Stmt = "func" <name:Ident> "(" <params:OptList<FieldList>> ")" <rt:("->" <DataType>)?> <body:Box<CompoundStmt>>
+FnDeclStmt: Stmt = "func" <name:Ident> "(" <params:OptList<FieldList>> ")" <rtype:("->" <Box<DataType>>)?> <body:Box<CompoundStmt>>
     => {
         let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
-        Stmt::new(StmtKind::FuncDecl(name, rt.unwrap_or(DataType::Void), params, body))
+        let rtype = rtype.unwrap_or(Box::new(DataType::new(DataTypeKind::Void)));
+        Stmt::new(StmtKind::FuncDecl(name, rtype, params, body))
     };
 
-ShortFnDeclStmt: Stmt = "func" <name:Ident> "(" <params:OptList<FieldList>> ")" <rt:("->" <DataType>)?> "=" <body:Box<Expr>>
+ShortFnDeclStmt: Stmt = "func" <name:Ident> "(" <params:OptList<FieldList>> ")" <rtype:("->" <Box<DataType>>)?> "=" <body:Box<Expr>>
     => {
         let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
-        Stmt::new(StmtKind::FuncDecl(name, rt.unwrap_or(DataType::Void), params, Box::new(Stmt::new(StmtKind::Return(body)))))
+        let rtype = rtype.unwrap_or(Box::new(DataType::new(DataTypeKind::Void)));
+        Stmt::new(StmtKind::FuncDecl(name, rtype, params, Box::new(Stmt::new(StmtKind::Return(body)))))
     };
 
 Field: Field = <i:Ident> ":" <t:DataType>
-    => Field(t, i);
+    => Field::new(i, t);
 
 FieldList: Vec<Field> = <is:List<Ident>> ":" <t:DataType>
-    => is.into_iter().map(|i| Field(t.clone(), i)).collect();
+    => is.into_iter().map(|i| Field::new(i, t.clone())).collect();
 
 StructDeclStmt: Stmt = "struct" <name:Ident> "{" <fields:(<FieldList> ";")+> "}"
     => Stmt::new(StmtKind::StructDecl(name, fields.into_iter().flat_map(|x| x.into_iter()).collect()));
@@ -141,21 +143,24 @@ Literal: Literal = {
 };
 
 DataType: DataType = {
-    "func" "(" <params:OptList<DataType>> ")" <rt:("->" <Box<DataType>>)?>
-        => DataType::Func(rt.unwrap_or(Box::new(DataType::Void)), params),
+    "func" "(" <params:OptList<DataType>> ")" <rtype:("->" <Box<DataType>>)?>
+        => {
+            let rtype = rtype.unwrap_or(Box::new(DataType::new(DataTypeKind::Void)));
+            DataType::new(DataTypeKind::Func(rtype, params))
+        },
     DataTypePtr
 };
 
 DataTypePtr: DataType = {
-    <Box<DataTypePtr>> "*" => DataType::Ptr(<>),
+    <Box<DataTypePtr>> "*" => DataType::new(DataTypeKind::Ptr(<>)),
     DataTypeAtom
 };
 
 DataTypeAtom: DataType = {
-    "u8" => DataType::U8,
-    "void" => DataType::Void,
-    Ident => DataType::Alias(<>),
-    "(" <DataType> ")"
+    "u8" => DataType::new(DataTypeKind::U8),
+    "void" => DataType::new(DataTypeKind::Void),
+    Ident => DataType::new(DataTypeKind::Alias(<>)),
+    "(" <Box<DataType>> ")" => DataType::new(DataTypeKind::Paren(<>)),
 };
 
 Integer: i64 = "INTEGER"
