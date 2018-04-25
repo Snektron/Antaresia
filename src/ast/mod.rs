@@ -40,6 +40,15 @@ where C: CheckType {
             kind
         }
     }
+
+    pub fn is_global_legal(&self) -> bool {
+        match self.kind {
+            StmtKind::FuncDecl(..) => true,
+            StmtKind::StructDecl(..) => true,
+            StmtKind::Expr(ref expr) => expr.is_global_legal(),
+            _ => false
+        }
+    }
 }
 
 pub enum StmtKind<C = Unchecked>

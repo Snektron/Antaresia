@@ -1,7 +1,7 @@
 use std::default::Default;
 use std::fmt;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Location {
     line: usize,
     col: usize
@@ -33,7 +33,7 @@ impl Default for Location {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Span(pub Location, pub Location);
 
 impl fmt::Display for Span {

@@ -16,14 +16,14 @@ pub trait CheckType {
     type ExprInfo;
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Checked;
 
 impl CheckType for Checked {
-    type ExprInfo = DataType;
+    type ExprInfo = DataType<Checked>;
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Unchecked;
 
 impl CheckType for Unchecked {
@@ -45,28 +45,36 @@ impl SemanticError {
     }
 }
 
-#[derive(Debug)]
-pub enum SemanticErrorKind {
-    Redefinition(Span, Name),
-    OutOfScope(Name)
-}
-
 impl Error for SemanticError {
     fn description(&self) -> &'static str {
         match self.kind {
-            SemanticErrorKind::Redefinition(_, _) => "redefinition error",
-            SemanticErrorKind::OutOfScope(_) => "out-of-scope error"
+            SemanticErrorKind::Redefinition(..) => "redefinition",
+            SemanticErrorKind::OutOfScope(_) => "out-of-scope",
+            SemanticErrorKind::IllegalStatement => "illegal statement",
+            SemanticErrorKind::InvalidReturnType(..) => "invalid return type"
         }
     }
+}
+
+#[derive(Debug)]
+pub enum SemanticErrorKind {
+    Redefinition(Span, Name),
+    OutOfScope(Name),
+    IllegalStatement,
+    InvalidReturnType(DataType, DataType)
 }
 
 impl fmt::Display for SemanticError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.kind {
             SemanticErrorKind::Redefinition(ref origin, ref name)
-                => write!(f, "{}: Redefinition error: '{}' is already defined at {}.", self.span.0, name, origin.0),
+                => write!(f, "{}: Redefinition error: '{}' is already defined at {}", self.span.0, name, origin.0),
             SemanticErrorKind::OutOfScope(ref name)
-                => write!(f, "{}: Out-of-scope error: '{}' was not found in this.", self.span.0, name)
+                => write!(f, "{}: Out-of-scope error: '{}' was not found in this", self.span.0, name),
+            SemanticErrorKind::IllegalStatement
+                => write!(f, "{}: Illegal statement error: statement is not allowed here", self.span.0),
+            SemanticErrorKind::InvalidReturnType(ref expected, ref actual)
+                => write!(f, "{}: Invalid return type: expected {} as defined on {}, found {}", self.span.0, expected, expected.span.0, actual)
         }
     }
 }

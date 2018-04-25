@@ -9,12 +9,21 @@ fn forward_declare<'s>(stmts: &Vec<Stmt>, ctx: &mut Context<'s>) -> CheckResult<
     for stmt in stmts {
         match stmt.kind {
             StmtKind::FuncDecl(ref name, ref rtype, ref params, _) => {
-                let params = params.into_iter().map(|field| &field.datatype).cloned().collect();
-                let func = DataType::new(stmt.span.clone(), DataTypeKind::Func(rtype.clone(), params));
+                let func = {
+                    let mut ctx = &mut ctx.enter();
+                    let params: CheckResult<Vec<DataType<Checked>>> = params.into_iter().map(|field| &field.datatype).cloned().map(|dt| dt.check(&mut ctx)).collect();
+                    let params = params?;
+                    let rtype = Box::new(rtype.clone().check(&mut ctx)?);
+                    DataType::new(stmt.span.clone(), DataTypeKind::Func(rtype, params))
+                };
                 ctx.declare_binding(name, func)?;
             },
             StmtKind::StructDecl(ref name, ref fields) => {
-                ctx.declare_struct(name, stmt.span.clone(), fields.to_vec())?;
+                let fields = {
+                     let mut ctx = &mut ctx.enter();
+                     check_fields(fields.to_vec(), &mut ctx)?
+                };
+                ctx.declare_struct(name, stmt.span.clone(), fields)?;
             },
             _ => {}
         }
@@ -36,20 +45,32 @@ fn check_stmts<'s>(unchecked: Vec<Stmt<Unchecked>>, ctx: &mut Context<'s>) -> Ch
 }
 
 fn check_fields<'s>(unchecked: Vec<Field<Unchecked>>, ctx: &mut Context<'s>) -> CheckResult<Vec<Field<Checked>>> {
-    Err(SemanticError::new(Default::default(), SemanticErrorKind::OutOfScope("WIP".into())))
-}
+    let mut checked = Vec::new();
 
-fn declare_fields<'s>(fields: &Vec<Field>, ctx: &mut Context<'s>) -> CheckResult<()> {
-    for field in fields {
-        ctx.declare_binding(&field.name, field.datatype.clone())?;
+    for field in unchecked {
+        let datatype = field.datatype.check(ctx)?;
+        ctx.declare_binding(&field.name, datatype.clone())?;
+        checked.push(Field::new(field.name, datatype));
     }
 
-    Ok(())
+    Ok(checked)
 }
 
 impl Program<Unchecked> {
     pub fn check<'s>(self, ctx: &mut Context<'s>) -> CheckResult<Program<Checked>> {
-        Ok(Program::new(self.span, check_stmts(self.stmts, ctx)?))
+        forward_declare(&self.stmts, ctx)?;
+
+        let mut checked = Vec::new();
+
+        for stmt in self.stmts.into_iter() {
+            if stmt.is_global_legal() {
+                checked.push(stmt.check(ctx)?);
+            } else {
+                return Err(SemanticError::new(stmt.span, SemanticErrorKind::IllegalStatement));
+            }
+        }
+
+        Ok(Program::new(self.span, checked))
     }
 }
 
@@ -63,7 +84,6 @@ impl Stmt<Unchecked> {
             StmtKind::FuncDecl(name, rtype, params, body) => {
                 // name & return type already declared while forward declaring.
                 let mut ctx = ctx.enter();
-                declare_fields(&params, &mut ctx)?;
                 let params = check_fields(params, &mut ctx)?;
                 let rtype = Box::new(rtype.check(&mut ctx)?);
                 let body = Box::new(body.check(&mut ctx)?);

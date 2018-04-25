@@ -18,6 +18,14 @@ where C: CheckType {
             info
         }
     }
+
+    pub fn is_global_legal(&self) -> bool {
+        match self.kind {
+            ExprKind::Decl(..) => true,
+            ExprKind::Binary(BinOpKind::Assign, ..) => true,
+            _ => false
+        }
+    }
 }
 
 impl Expr<Unchecked> {

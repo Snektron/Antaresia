@@ -4,8 +4,9 @@ use ast::Name;
 use check::{CheckType, Unchecked};
 use utility;
 use parser::Span;
+use std::cmp::PartialEq;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct DataType<C = Unchecked>
 where C: CheckType {
     pub span: Span,
@@ -42,7 +43,14 @@ where C: CheckType {
     }
 }
 
-#[derive(Clone)]
+impl<C> PartialEq for DataType<C>
+where C: CheckType {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind.eq(&other)
+    } 
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum DataTypeKind<C = Unchecked>
 where C: CheckType {
     U8,
@@ -53,7 +61,7 @@ where C: CheckType {
     Paren(Box<DataType<C>>) // for pretty-printing
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Field<C = Unchecked>
 where C: CheckType {
     pub name: Name,
