@@ -1,8 +1,7 @@
-use std::default::Default;
 use check::{CheckResult, SemanticError, SemanticErrorKind, Context};
 use check::{Unchecked, Checked};
 use ast::{Program, Stmt, StmtKind, Expr};
-use ast::{DataType, DataTypeKind, Field};
+use ast::datatype::{DataType, DataTypeKind, Field, DataTypeVec};
 
 // forward insert type and function definitions
 fn forward_declare<'s>(stmts: &Vec<Stmt>, ctx: &mut Context<'s>) -> CheckResult<()> {
@@ -81,6 +80,16 @@ impl Stmt<Unchecked> {
                 let stmts = check_stmts(stmts, &mut ctx.enter())?;
                 Ok(Stmt::new(self.span, StmtKind::Compound(stmts)))
             },
+            StmtKind::Return(expr) => {
+                let expr = expr.check(ctx)?;
+                let expected = ctx.lookup_return_type().unwrap(); // return statements cant appear in global
+                if &expr.info == expected {
+                    Ok(Stmt::new(self.span, StmtKind::Return(Box::new(expr))))
+                } else {
+                    let kind = SemanticErrorKind::InvalidReturnType(expected.clone(), expr.info);
+                    Err(SemanticError::new(self.span, kind))
+                }
+            },
             StmtKind::FuncDecl(name, rtype, params, body) => {
                 // name & return type already declared while forward declaring.
                 let mut ctx = ctx.enter();
@@ -89,19 +98,44 @@ impl Stmt<Unchecked> {
                 let body = Box::new(body.check(&mut ctx)?);
                 Ok(Stmt::new(self.span, StmtKind::FuncDecl(name, rtype, params, body)))
             },
-            _ => Err(SemanticError::new(Default::default(), SemanticErrorKind::OutOfScope("WIP".into())))
+            _ => Err(SemanticError::new(self.span, SemanticErrorKind::OutOfScope("WIP-stmt".into())))
         }
     }
 }
 
 impl Expr<Unchecked> {
     pub fn check<'s>(self, ctx: &mut Context<'s>) -> CheckResult<Expr<Checked>> {
-        Err(SemanticError::new(Default::default(), SemanticErrorKind::OutOfScope("WIP".into())))
+        Err(SemanticError::new(self.span, SemanticErrorKind::OutOfScope("WIP-expr".into())))
     }
 }
 
 impl DataType<Unchecked> {
     pub fn check<'s>(self, ctx: &mut Context<'s>) -> CheckResult<DataType<Checked>> {
-        Err(SemanticError::new(Default::default(), SemanticErrorKind::OutOfScope("WIP".into())))
+        match self.kind {
+            DataTypeKind::U8 => Ok(DataType::new(self.span, DataTypeKind::U8)),
+            DataTypeKind::Void => Ok(DataType::new(self.span, DataTypeKind::Void)),
+            DataTypeKind::Alias(name) => {
+                if ctx.lookup_struct(&name).is_none() {
+                    let kind = SemanticErrorKind::Undefined(name);
+                    Err(SemanticError::new(self.span, kind))
+                } else {
+                    Ok(DataType::new(self.span, DataTypeKind::Alias(name)))
+                }
+            },
+            DataTypeKind::Ptr(inner) => Ok(DataType::new(self.span, DataTypeKind::Ptr(Box::new(inner.check(ctx)?)))),
+            DataTypeKind::Func(ret_type, params) => {
+                let params = params.check(ctx)?;
+                let ret_type = Box::new(ret_type.check(ctx)?);
+                Ok(DataType::new(self.span, DataTypeKind::Func(ret_type, params)))
+            },
+            DataTypeKind::Paren(inner) => Ok(DataType::new(self.span, DataTypeKind::Paren(Box::new(inner.check(ctx)?)))),
+        }
+    }
+}
+
+impl DataTypeVec<Unchecked> {
+    pub fn check<'s>(self, ctx: &mut Context<'s>) -> CheckResult<DataTypeVec<Checked>> {
+        let types = self.inner.into_iter().map(|dt| dt.check(ctx)).collect();
+        Ok(DataTypeVec::new(types))
     }
 }

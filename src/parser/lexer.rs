@@ -119,9 +119,9 @@ impl<'i> Lexer<'i> {
                     _ => Ok(Token::Slash)
                 }
             },
-            c if c.is_alphabetic() => {
+            c if c.is_alphabetic() || !c.is_ascii() || c == '_' => {
                 let word = self
-                    .consume_while(|c| c.is_alphanumeric())
+                    .consume_while(|c| c.is_alphanumeric() || !c.is_ascii() || c == '_' || c == '?')
                     .collect::<String>();
 
                 let tok = KEYWORDS.get(word.as_str())

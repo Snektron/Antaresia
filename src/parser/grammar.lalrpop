@@ -1,7 +1,7 @@
 use ast::{Program, Stmt, StmtKind};
 use ast::{BinOpKind, UnOpKind};
 use ast::{Expr, ExprKind, Literal};
-use ast::{DataType, DataTypeKind, Field};
+use ast::datatype::{DataType, DataTypeKind, Field, DataTypeVec};
 use parser::{lexer, span, token, Span};
 
 grammar;
@@ -145,8 +145,11 @@ Literal: Literal = {
     Integer => Literal::Integer(<>)
 };
 
+DataTypeList: DataTypeVec = <params:OptList<DataType>>
+    => DataTypeVec::new(<>);
+
 DataType: DataType = {
-    <lo:@L> "func" "(" <params:OptList<DataType>> ")" <rlo:@L> <rtype:("->" <Box<DataType>>)?> <hi:@R>
+    <lo:@L> "func" "(" <params:DataTypeList> ")" <rlo:@L> <rtype:("->" <Box<DataType>>)?> <hi:@R>
         => {
             let rtype = rtype.unwrap_or(Box::new(DataType::new(Span(rlo, hi.clone()), DataTypeKind::Void)));
             DataType::new(Span(lo, hi), DataTypeKind::Func(rtype, params))

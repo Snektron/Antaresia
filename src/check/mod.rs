@@ -49,7 +49,8 @@ impl Error for SemanticError {
     fn description(&self) -> &'static str {
         match self.kind {
             SemanticErrorKind::Redefinition(..) => "redefinition",
-            SemanticErrorKind::OutOfScope(_) => "out-of-scope",
+            SemanticErrorKind::Undefined(..) => "undefined",
+            SemanticErrorKind::OutOfScope(..) => "out-of-scope",
             SemanticErrorKind::IllegalStatement => "illegal statement",
             SemanticErrorKind::InvalidReturnType(..) => "invalid return type"
         }
@@ -59,9 +60,10 @@ impl Error for SemanticError {
 #[derive(Debug)]
 pub enum SemanticErrorKind {
     Redefinition(Span, Name),
+    Undefined(Name),
     OutOfScope(Name),
     IllegalStatement,
-    InvalidReturnType(DataType, DataType)
+    InvalidReturnType(DataType<Checked>, DataType<Checked>)
 }
 
 impl fmt::Display for SemanticError {
@@ -69,8 +71,10 @@ impl fmt::Display for SemanticError {
         match self.kind {
             SemanticErrorKind::Redefinition(ref origin, ref name)
                 => write!(f, "{}: Redefinition error: '{}' is already defined at {}", self.span.0, name, origin.0),
+            SemanticErrorKind::Undefined(ref name)
+                => write!(f, "{}: Undefined variable or type '{}'", self.span.0, name),
             SemanticErrorKind::OutOfScope(ref name)
-                => write!(f, "{}: Out-of-scope error: '{}' was not found in this", self.span.0, name),
+                => write!(f, "{}: Out-of-scope error: '{}' was not found in this scope", self.span.0, name),
             SemanticErrorKind::IllegalStatement
                 => write!(f, "{}: Illegal statement error: statement is not allowed here", self.span.0),
             SemanticErrorKind::InvalidReturnType(ref expected, ref actual)
