@@ -1,28 +1,36 @@
 use check::{CheckResult, SemanticError, SemanticErrorKind, Context};
 use check::{Unchecked, Checked};
-use ast::{Program, Stmt, StmtKind, Expr};
-use ast::datatype::{DataType, DataTypeKind, Field, DataTypeVec};
+use ast::{Program, Stmt, StmtKind, Expr, ExprKind, UnOpKind};
+use ast::ty::{Ty, TyKind, Field};
 
-// forward insert type and function definitions
 fn forward_declare<'s>(stmts: &Vec<Stmt>, ctx: &mut Context<'s>) -> CheckResult<()> {
     for stmt in stmts {
         match stmt.kind {
-            StmtKind::FuncDecl(ref name, ref rtype, ref params, _) => {
+            StmtKind::FuncDecl(ref name, ref rty, ref params, _) => {
                 let func = {
                     let mut ctx = &mut ctx.enter();
-                    let params: CheckResult<Vec<DataType<Checked>>> = params.into_iter().map(|field| &field.datatype).cloned().map(|dt| dt.check(&mut ctx)).collect();
-                    let params = params?;
-                    let rtype = Box::new(rtype.clone().check(&mut ctx)?);
-                    DataType::new(stmt.span.clone(), DataTypeKind::Func(rtype, params))
+
+                    let params: CheckResult<_> = params
+                        .into_iter()
+                        .map(|field| &field.datatype)
+                        .cloned()
+                        .map(|dt| dt.check(&mut ctx))
+                        .collect();
+
+                    let rty = rty
+                        .clone()
+                        .check(&mut ctx)?;
+
+                    let kind = TyKind::Func(Box::new(rty), params?);
+                    let span = stmt.span.clone();
+                    Ty::new(span, kind)
                 };
                 ctx.declare_binding(name, func)?;
             },
             StmtKind::StructDecl(ref name, ref fields) => {
-                let fields = {
-                     let mut ctx = &mut ctx.enter();
-                     check_fields(fields.to_vec(), &mut ctx)?
-                };
-                ctx.declare_struct(name, stmt.span.clone(), fields)?;
+                let fields = check_fields(fields.to_vec(), &mut ctx.enter())?;
+                let span = stmt.span.clone();
+                ctx.declare_struct(name, span, fields)?;
             },
             _ => {}
         }
@@ -31,111 +39,202 @@ fn forward_declare<'s>(stmts: &Vec<Stmt>, ctx: &mut Context<'s>) -> CheckResult<
     Ok(())
 }
 
-fn check_stmts<'s>(unchecked: Vec<Stmt<Unchecked>>, ctx: &mut Context<'s>) -> CheckResult<Vec<Stmt<Checked>>> {
+fn check_stmts<'s>(unchecked: Vec<Stmt>, ctx: &mut Context<'s>) -> CheckResult<Vec<Stmt<Checked>>> {
     forward_declare(&unchecked, ctx)?;
 
-    let mut checked = Vec::new();
-
-    for stmt in unchecked.into_iter() {
-        checked.push(stmt.check(ctx)?);
-    }
-
-    Ok(checked)
+    unchecked
+        .into_iter()
+        .map(|stmt| stmt.check(ctx))
+        .collect()
 }
 
-fn check_fields<'s>(unchecked: Vec<Field<Unchecked>>, ctx: &mut Context<'s>) -> CheckResult<Vec<Field<Checked>>> {
-    let mut checked = Vec::new();
+fn check_fields<'s>(unchecked: Vec<Field>, ctx: &mut Context<'s>) -> CheckResult<Vec<Field<Checked>>> {
+    unchecked
+        .into_iter()
+        .map(|field| field.check(ctx))
+        .collect()
+}
 
-    for field in unchecked {
-        let datatype = field.datatype.check(ctx)?;
-        ctx.declare_binding(&field.name, datatype.clone())?;
-        checked.push(Field::new(field.name, datatype));
-    }
+fn check_types<'s>(unchecked: Vec<Ty>, ctx: &mut Context<'s>) -> CheckResult<Vec<Ty<Checked>>> {
+    unchecked
+        .into_iter()
+        .map(|dt| dt.check(ctx))
+        .collect()
+}
 
-    Ok(checked)
+fn check_exprs<'s>(unchecked: Vec<Expr>, ctx: &mut Context<'s>) -> CheckResult<Vec<Expr<Checked>>> {
+    unchecked
+        .into_iter()
+        .map(|expr| expr.check(ctx))
+        .collect()
 }
 
 impl Program<Unchecked> {
     pub fn check<'s>(self, ctx: &mut Context<'s>) -> CheckResult<Program<Checked>> {
         forward_declare(&self.stmts, ctx)?;
 
-        let mut checked = Vec::new();
+        let checked = self.stmts
+            .into_iter()
+            .map(|stmt| {
+                if stmt.is_global_legal() {
+                    stmt.check(ctx)
+                } else {
+                    Err(SemanticError::new(stmt.span, SemanticErrorKind::IllegalStatement))
+                }
+            })
+            .collect::<CheckResult<_>>();
 
-        for stmt in self.stmts.into_iter() {
-            if stmt.is_global_legal() {
-                checked.push(stmt.check(ctx)?);
-            } else {
-                return Err(SemanticError::new(stmt.span, SemanticErrorKind::IllegalStatement));
-            }
-        }
-
-        Ok(Program::new(self.span, checked))
+        Ok(Program::new(self.span, checked?))
     }
 }
 
 impl Stmt<Unchecked> {
     pub fn check<'s>(self, ctx: &mut Context<'s>) -> CheckResult<Stmt<Checked>> {
-        match self.kind {
+        let span = self.span;
+        let kind = match self.kind {
             StmtKind::Compound(stmts) => {
-                let stmts = check_stmts(stmts, &mut ctx.enter())?;
-                Ok(Stmt::new(self.span, StmtKind::Compound(stmts)))
+                check_stmts(stmts, &mut ctx.enter())
+                    .map(|stmts| StmtKind::Compound(stmts))
             },
             StmtKind::Return(expr) => {
                 let expr = expr.check(ctx)?;
-                let expected = ctx.lookup_return_type().unwrap(); // return statements cant appear in global
+                let expected = ctx.lookup_return_type().expect("Return statements cannot appear in global scope");
                 if &expr.info == expected {
-                    Ok(Stmt::new(self.span, StmtKind::Return(Box::new(expr))))
+                    Ok(StmtKind::Return(Box::new(expr)))
                 } else {
                     let kind = SemanticErrorKind::InvalidReturnType(expected.clone(), expr.info);
-                    Err(SemanticError::new(self.span, kind))
+                    Err(SemanticError::new(span.clone(), kind))
                 }
             },
-            StmtKind::FuncDecl(name, rtype, params, body) => {
+            StmtKind::FuncDecl(name, rty, params, body) => {
                 // name & return type already declared while forward declaring.
                 let mut ctx = ctx.enter();
                 let params = check_fields(params, &mut ctx)?;
-                let rtype = Box::new(rtype.check(&mut ctx)?);
-                let body = Box::new(body.check(&mut ctx)?);
-                Ok(Stmt::new(self.span, StmtKind::FuncDecl(name, rtype, params, body)))
+                let rty = rty.check(&mut ctx)?;
+                let mut ctx = ctx.enter_func(rty.clone());
+                let body = body.check(&mut ctx)?;
+                Ok(StmtKind::FuncDecl(name, Box::new(rty), params, Box::new(body)))
             },
-            _ => Err(SemanticError::new(self.span, SemanticErrorKind::OutOfScope("WIP-stmt".into())))
-        }
+            _ => Err(SemanticError::new(span.clone(), SemanticErrorKind::Undefined("WIP-stmt".into())))
+        };
+
+        kind.map(|kind| Stmt::new(span, kind))
     }
 }
 
 impl Expr<Unchecked> {
     pub fn check<'s>(self, ctx: &mut Context<'s>) -> CheckResult<Expr<Checked>> {
-        Err(SemanticError::new(self.span, SemanticErrorKind::OutOfScope("WIP-expr".into())))
-    }
-}
+        let span = self.span;
+        let kind = match self.kind {
+            ExprKind::Binary(op, lhs, rhs) => {
+                let lhs = lhs.check(ctx)?;
+                let rhs = rhs.check(ctx)?;
 
-impl DataType<Unchecked> {
-    pub fn check<'s>(self, ctx: &mut Context<'s>) -> CheckResult<DataType<Checked>> {
-        match self.kind {
-            DataTypeKind::U8 => Ok(DataType::new(self.span, DataTypeKind::U8)),
-            DataTypeKind::Void => Ok(DataType::new(self.span, DataTypeKind::Void)),
-            DataTypeKind::Alias(name) => {
-                if ctx.lookup_struct(&name).is_none() {
-                    let kind = SemanticErrorKind::Undefined(name);
-                    Err(SemanticError::new(self.span, kind))
+                // TODO: implicit casting
+                if lhs.info == rhs.info {
+                    let result = lhs.info.clone();
+                    let kind = ExprKind::Binary(op, Box::new(lhs), Box::new(rhs));
+                    Ok((kind, result))
                 } else {
-                    Ok(DataType::new(self.span, DataTypeKind::Alias(name)))
+                    let kind = SemanticErrorKind::InvalidBinary(op, lhs.info, rhs.info);
+                    Err(SemanticError::new(span.clone(), kind))
                 }
             },
-            DataTypeKind::Ptr(inner) => Ok(DataType::new(self.span, DataTypeKind::Ptr(Box::new(inner.check(ctx)?)))),
-            DataTypeKind::Func(ret_type, params) => {
-                let params = params.check(ctx)?;
-                let ret_type = Box::new(ret_type.check(ctx)?);
-                Ok(DataType::new(self.span, DataTypeKind::Func(ret_type, params)))
+            ExprKind::Unary(op, lhs) => {
+                let lhs = lhs.check(ctx)?;
+
+                match op {
+                    UnOpKind::Deref => {
+                        let info = lhs.info.clone();
+                        let result = lhs.info
+                            .clone()
+                            .dereference()
+                            .ok_or_else(|| {
+                                let kind = SemanticErrorKind::InvalidUnary(UnOpKind::Deref, lhs.info.clone());
+                                SemanticError::new(span.clone(), kind)
+                            })?;
+
+                        let kind = ExprKind::Unary(UnOpKind::Deref, Box::new(lhs));
+                        Ok((kind, result))
+                    },
+                    UnOpKind::Ref => {
+                        let actual = lhs.info.clone().reference();
+                        Ok((ExprKind::Unary(UnOpKind::Ref, Box::new(lhs)), actual))
+                    },
+                    _ => {
+                        Err(SemanticError::new(span.clone(), SemanticErrorKind::Undefined("WIP-expr".into())))
+                    }
+                }
             },
-            DataTypeKind::Paren(inner) => Ok(DataType::new(self.span, DataTypeKind::Paren(Box::new(inner.check(ctx)?)))),
-        }
+            // ExprKind::Call(callee, args) => {
+            //     let callee = callee.check(ctx)?;
+            //     let args = check_exprs(args)?;
+
+            // },
+            ExprKind::Literal(lit) => {
+                let ty = lit.ty();
+                Ok((ExprKind::Literal(lit), ty))
+            },
+            ExprKind::Name(name) => {
+                ctx.lookup_binding(&name)
+                    .ok_or_else(|| {
+                        let kind = SemanticErrorKind::Undefined(name.clone());
+                        SemanticError::new(span.clone(), kind)
+                    })
+                    .map(|ty| (ExprKind::Name(name), ty.clone()))
+            },
+            // ExprKind::Decl(field, None) => {
+            //     let field = field.check(ctx)?;
+            //     Ok((ExprKind::Decl(field, None), )
+            // },
+            // ExprKind::Decl(field, Some(value)) => {
+            //     let field = field.check(ctx)?;
+            //     let value = value.check(ctx)?;
+            //     Ok(ExprKind::Decl(field, Some(Box::new(value))))
+            // },
+            _ => Err(SemanticError::new(span.clone(), SemanticErrorKind::Undefined("WIP-expr".into())))
+        };
+
+        kind.map(|(kind, result)| Expr::new(span, kind, result))
     }
 }
 
-impl DataTypeVec<Unchecked> {
-    pub fn check<'s>(self, ctx: &mut Context<'s>) -> CheckResult<DataTypeVec<Checked>> {
-        let types = self.inner.into_iter().map(|dt| dt.check(ctx)).collect();
-        Ok(DataTypeVec::new(types))
+impl Ty<Unchecked> {
+    pub fn check<'s>(self, ctx: &mut Context<'s>) -> CheckResult<Ty<Checked>> {
+        let span = self.span;
+        let kind = match self.kind {
+            TyKind::U8 => Ok(TyKind::U8),
+            TyKind::Void => Ok(TyKind::Void),
+            TyKind::Alias(name) => {
+                if ctx.lookup_struct(&name).is_some() {
+                    Ok(TyKind::Alias(name))
+                } else {
+                    let kind = SemanticErrorKind::Undefined(name);
+                    Err(SemanticError::new(span.clone(), kind))
+                }
+            },
+            TyKind::Ptr(inner) => Ok(TyKind::Ptr(Box::new(inner.check(ctx)?))),
+            TyKind::Func(rty, params) => {
+                let params = check_types(params, ctx)?;
+                let rty = rty.check(ctx)?;
+                Ok(TyKind::Func(Box::new(rty), params))
+            },
+            TyKind::Paren(inner) => Ok(TyKind::Paren(Box::new(inner.check(ctx)?))),
+        };
+
+        kind.map(|kind| Ty::new(span, kind))
+    }
+}
+
+impl Field<Unchecked> {
+    pub fn check<'s>(self, ctx: &mut Context<'s>) -> CheckResult<Field<Checked>> {
+    let name = self.name;
+    self.ty
+        .check(ctx)
+        .and_then(|dt| {
+            ctx.declare_binding(&name, dt.clone())?;
+            Ok(dt)
+        })
+        .map(|dt| Field::new(name, dt))
     }
 }

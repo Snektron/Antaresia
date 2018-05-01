@@ -12,8 +12,8 @@ mod utility;
 use std::str::from_utf8;
 use parser::Parser;
 use parser::lexer::Lexer;
-use check::Context;
 use ast::print::Printer;
+use check::typecheck::Checker;
 
 fn main() {
     let program = from_utf8(include_bytes!("test.an")).unwrap();
@@ -25,7 +25,8 @@ fn main() {
 
     ast.print(&mut Printer::new());
 
-    let ast = ast.check(&mut Context::new());
+    let mut checker = Checker::new();
+    let ast = checker.check_program(ast);
 
     println!("------");
 

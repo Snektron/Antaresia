@@ -1,5 +1,6 @@
 use std::iter::Iterator;
 use std::default::Default;
+use std::ops::{Deref, DerefMut};
 
 pub struct Scoped<'a, T>
 where T: 'a {
@@ -22,6 +23,12 @@ impl<'a, T> Scoped<'a, T> {
         }
     }
 
+    pub fn find<'b, F, R>(&'b self, func: F) -> Option<R>
+    where F: Fn(&'b T) -> Option<R> {
+        func(&self.item)
+            .or_else(|| self.next.and_then(|next| next.find(func)))
+    }
+
     pub fn item(&self) -> &T {
         &self.item
     }
@@ -41,6 +48,20 @@ impl<'a, T> Scoped<'a, T>
 where T: Default {
     pub fn enter<'b>(&'b self) -> Scoped<'b, T> {
         self.enter_with(Default::default())
+    }
+}
+
+impl<'a, T> Deref for Scoped<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.item
+    }
+}
+
+impl<'a, T> DerefMut for Scoped<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.item
     }
 }
 

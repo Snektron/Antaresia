@@ -1,18 +1,18 @@
 use std::collections::HashMap;
 use check::{CheckResult, SemanticError, SemanticErrorKind, Checked};
 use check::scoped::{Scoped, Iter as ScopeIter};
-use ast::{DataType, Field};
+use ast::ty::{Ty, Field};
 use ast::Name;
 use parser::Span;
 
 pub struct Frame {
-    bindings: HashMap<Name, DataType<Checked>>,
+    bindings: HashMap<Name, Ty<Checked>>,
     structs: HashMap<Name, (Span, Vec<Field<Checked>>)>,
-    return_type: Option<DataType<Checked>> // the expected return type
+    return_type: Option<Ty<Checked>> // the expected return type
 }
 
 impl Frame {
-    pub fn new(return_type: Option<DataType<Checked>>) -> Self {
+    pub fn new(return_type: Option<Ty<Checked>>) -> Self {
         Frame {
             bindings: HashMap::new(),
             structs: HashMap::new(),
@@ -38,7 +38,7 @@ impl<'s> Context<'s> {
         }
     }
 
-    pub fn enter_func<'a>(&'a self, return_type: DataType<Checked>) -> Context<'a> {
+    pub fn enter_func<'a>(&'a self, return_type: Ty<Checked>) -> Context<'a> {
         Context {
             scope: self.scope.enter_with(Frame::new(Some(return_type)))
         }
@@ -48,7 +48,7 @@ impl<'s> Context<'s> {
         self.scope.iter()
     }
 
-    pub fn declare_binding(&mut self, name: &Name, dt: DataType<Checked>) -> CheckResult<()> {
+    pub fn declare_binding(&mut self, name: &Name, dt: Ty<Checked>) -> CheckResult<()> {
         let span = dt.span.clone();
 
         match self.scope.item_mut().bindings.insert(name.clone(), dt) {
@@ -64,7 +64,7 @@ impl<'s> Context<'s> {
         }
     }
 
-    pub fn lookup_binding(&self, name: &Name) -> Option<&DataType<Checked>> {
+    pub fn lookup_binding(&self, name: &Name) -> Option<&Ty<Checked>> {
         for scope in self.iter() {
             if let Some(dt) = scope.bindings.get(name) {
                 return Some(dt);
@@ -84,7 +84,7 @@ impl<'s> Context<'s> {
         None
     }
 
-    pub fn lookup_return_type(&self) -> Option<&DataType<Checked>> {
+    pub fn lookup_return_type(&self) -> Option<&Ty<Checked>> {
         for scope in self.iter() {
             if let Some(ref return_type) = scope.return_type {
                 return Some(&return_type);

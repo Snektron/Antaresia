@@ -1,7 +1,7 @@
 use ast::{Program, Stmt, StmtKind};
 use ast::{BinOpKind, UnOpKind};
 use ast::{Expr, ExprKind, Literal};
-use ast::datatype::{DataType, DataTypeKind, Field, DataTypeVec};
+use ast::ty::{Ty, TyKind, Field};
 use parser::{lexer, span, token, Span};
 
 grammar;
@@ -56,27 +56,25 @@ IfOrBlock = {
 ReturnStmt: Stmt = <lo:@L> "return" <e:Box<Expr>> ";" <hi:@L>
     => Stmt::new(Span(lo, hi), StmtKind::Return(e));
 
-FnDeclStmt: Stmt = <lo:@L> "func" <name:Ident> "(" <params:OptList<FieldList>> ")" <rlo:@L>
-                   <rtype:("->" <Box<DataType>>)?> <rhi:@R> <body:Box<CompoundStmt>> <hi:@R>
+FnDeclStmt: Stmt = <lo:@L> "func" <name:Ident> "(" <params:OptList<FieldList>> ")"
+                   <rty:Box<ReturnTy>> <body:Box<CompoundStmt>> <hi:@R>
     => {
         let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
-        let rtype = rtype.unwrap_or(Box::new(DataType::new(Span(rlo, rhi), DataTypeKind::Void)));
-        Stmt::new(Span(lo, hi), StmtKind::FuncDecl(name, rtype, params, body))
+        Stmt::new(Span(lo, hi), StmtKind::FuncDecl(name, rty, params, body))
     };
 
-ShortFnDeclStmt: Stmt = <lo:@L> "func" <name:Ident> "(" <params:OptList<FieldList>> ")" <rlo:@L>
-                        <rtype:("->" <Box<DataType>>)?> <rhi:@R> <blo:@L> "=" <body:Box<Expr>> ";" <hi:@R>
+ShortFnDeclStmt: Stmt = <lo:@L> "func" <name:Ident> "(" <params:OptList<FieldList>> ")"
+                        <rty:Box<ReturnTy>> <blo:@L> "=" <body:Box<Expr>> ";" <hi:@R>
     => {
         let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
-        let rtype = rtype.unwrap_or(Box::new(DataType::new(Span(rlo, rhi), DataTypeKind::Void)));
         let rstmt = Box::new(Stmt::new(Span(blo, hi.clone()), StmtKind::Return(body)));
-        Stmt::new(Span(lo, hi), StmtKind::FuncDecl(name, rtype, params, rstmt))
+        Stmt::new(Span(lo, hi), StmtKind::FuncDecl(name, rty, params, rstmt))
     };
 
-Field: Field = <i:Ident> ":" <t:DataType>
+Field: Field = <i:Ident> ":" <t:Ty>
     => Field::new(i, t);
 
-FieldList: Vec<Field> = <is:List<Ident>> ":" <t:DataType>
+FieldList: Vec<Field> = <is:List<Ident>> ":" <t:Ty>
     => is.into_iter().map(|i| Field::new(i, t.clone())).collect();
 
 StructDeclStmt: Stmt = <lo:@L> "struct" <name:Ident> "{" <fields:(<FieldList> ";")+> "}" <hi:@R>
@@ -95,7 +93,7 @@ AssignmentKind: BinOpKind = "="
     => BinOpKind::Assign;
 
 Cast = {
-    <lo:@L> <lhs:Box<Cast>> "as" <dt:DataType> <hi:@R>
+    <lo:@L> <lhs:Box<Cast>> "as" <dt:Ty> <hi:@R>
         => Expr::unchecked(Span(lo, hi), ExprKind::Cast(lhs, dt)),
     Sum
 };
@@ -145,28 +143,25 @@ Literal: Literal = {
     Integer => Literal::Integer(<>)
 };
 
-DataTypeList: DataTypeVec = <params:OptList<DataType>>
-    => DataTypeVec::new(<>);
+ReturnTy: Ty = <lo:@L> <ty:("->" <Ty>)?> <hi:@R>
+    => ty.unwrap_or(Ty::new(Span(lo, hi), TyKind::Void));
 
-DataType: DataType = {
-    <lo:@L> "func" "(" <params:DataTypeList> ")" <rlo:@L> <rtype:("->" <Box<DataType>>)?> <hi:@R>
-        => {
-            let rtype = rtype.unwrap_or(Box::new(DataType::new(Span(rlo, hi.clone()), DataTypeKind::Void)));
-            DataType::new(Span(lo, hi), DataTypeKind::Func(rtype, params))
-        },
-    DataTypePtr
+Ty: Ty = {
+    <lo:@L> "func" "(" <params:OptList<Ty>> ")" <rty:Box<ReturnTy>> <hi:@R>
+        => Ty::new(Span(lo, hi), TyKind::Func(rty, params)),
+    TyPtr
 };
 
-DataTypePtr: DataType = {
-    <lo:@L> <ptr:Box<DataTypePtr>> <hi:@R> "*" => DataType::new(Span(lo, hi), DataTypeKind::Ptr(ptr)),
-    DataTypeAtom
+TyPtr: Ty = {
+    <lo:@L> <ptr:Box<TyPtr>> <hi:@R> "*" => Ty::new(Span(lo, hi), TyKind::Ptr(ptr)),
+    TyAtom
 };
 
-DataTypeAtom: DataType = {
-    <lo:@L> "u8" <hi:@L> => DataType::new(Span(lo, hi), DataTypeKind::U8),
-    <lo:@L> "void" <hi:@R> => DataType::new(Span(lo, hi), DataTypeKind::Void),
-    <lo:@L> <i:Ident> <hi:@R> => DataType::new(Span(lo, hi), DataTypeKind::Alias(i)),
-    <lo:@L> "(" <ptr:Box<DataType>> ")" <hi:@R> => DataType::new(Span(lo, hi), DataTypeKind::Paren(ptr)),
+TyAtom: Ty = {
+    <lo:@L> "u8" <hi:@L> => Ty::new(Span(lo, hi), TyKind::U8),
+    <lo:@L> "void" <hi:@R> => Ty::new(Span(lo, hi), TyKind::Void),
+    <lo:@L> <i:Ident> <hi:@R> => Ty::new(Span(lo, hi), TyKind::Alias(i)),
+    <lo:@L> "(" <ptr:Box<Ty>> ")" <hi:@R> => Ty::new(Span(lo, hi), TyKind::Paren(ptr)),
 };
 
 Integer: i64 = "INTEGER"

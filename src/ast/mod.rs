@@ -1,12 +1,12 @@
 pub mod print;
 pub mod expr;
-pub mod datatype;
+pub mod ty;
 
 pub use self::expr::{Expr, ExprKind, Literal, BinOpKind, UnOpKind};
-pub use self::datatype::{DataType, DataTypeKind, Field};
 
 use check::{CheckType, Unchecked};
 use parser::Span;
+use ast::ty::{Ty, Field};
 
 pub type Name = String;
 
@@ -51,13 +51,15 @@ where C: CheckType {
     }
 }
 
+pub type Stmts<C = Unchecked> = Vec<Stmt<C>>;
+
 pub enum StmtKind<C = Unchecked>
 where C: CheckType {
-    Compound(Vec<Stmt<C>>),
+    Compound(Stmts<C>),
     If(Box<Expr<C>>, Box<Stmt<C>>, Option<Box<Stmt<C>>>),
     While(Box<Expr<C>>, Box<Stmt<C>>),
     Return(Box<Expr<C>>),
     Expr(Box<Expr<C>>),
-    FuncDecl(Name, Box<DataType<C>>, Vec<Field<C>>, Box<Stmt<C>>),
+    FuncDecl(Name, Box<Ty<C>>, Vec<Field<C>>, Box<Stmt<C>>),
     StructDecl(Name, Vec<Field<C>>)
 }
