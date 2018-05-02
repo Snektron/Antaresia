@@ -1,7 +1,7 @@
-use ast::{Program, Stmt, StmtKind};
+use ast::{Program, Stmt, StmtKind, FuncDecl};
 use ast::{BinOpKind, UnOpKind};
 use ast::{Expr, ExprKind, Literal};
-use ast::ty::{Ty, TyKind, Field};
+use ast::ty::{Ty, TyKind, Field, FuncTy};
 use parser::{lexer, span, token, Span};
 
 grammar;
@@ -57,18 +57,20 @@ ReturnStmt: Stmt = <lo:@L> "return" <e:Box<Expr>> ";" <hi:@L>
     => Stmt::new(Span(lo, hi), StmtKind::Return(e));
 
 FnDeclStmt: Stmt = <lo:@L> "func" <name:Ident> "(" <params:OptList<FieldList>> ")"
-                   <rty:Box<ReturnTy>> <body:Box<CompoundStmt>> <hi:@R>
+                   <rty:ReturnTy> <body:CompoundStmt> <hi:@R>
     => {
         let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
-        Stmt::new(Span(lo, hi), StmtKind::FuncDecl(name, rty, params, body))
+        let decl = Box::new(FuncDecl::new(name, params, rty, body));
+        Stmt::new(Span(lo, hi), StmtKind::FuncDecl(decl))
     };
 
 ShortFnDeclStmt: Stmt = <lo:@L> "func" <name:Ident> "(" <params:OptList<FieldList>> ")"
-                        <rty:Box<ReturnTy>> <blo:@L> "=" <body:Box<Expr>> ";" <hi:@R>
+                        <rty:ReturnTy> <blo:@L> "=" <body:Box<Expr>> ";" <hi:@R>
     => {
         let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
-        let rstmt = Box::new(Stmt::new(Span(blo, hi.clone()), StmtKind::Return(body)));
-        Stmt::new(Span(lo, hi), StmtKind::FuncDecl(name, rty, params, rstmt))
+        let body = Stmt::new(Span(blo, hi.clone()), StmtKind::Return(body));
+        let decl = Box::new(FuncDecl::new(name, params, rty, body));
+        Stmt::new(Span(lo, hi), StmtKind::FuncDecl(decl))
     };
 
 Field: Field = <i:Ident> ":" <t:Ty>
@@ -147,8 +149,11 @@ ReturnTy: Ty = <lo:@L> <ty:("->" <Ty>)?> <hi:@R>
     => ty.unwrap_or(Ty::new(Span(lo, hi), TyKind::Void));
 
 Ty: Ty = {
-    <lo:@L> "func" "(" <params:OptList<Ty>> ")" <rty:Box<ReturnTy>> <hi:@R>
-        => Ty::new(Span(lo, hi), TyKind::Func(rty, params)),
+    <lo:@L> "func" "(" <params:OptList<Ty>> ")" <rty:ReturnTy> <hi:@R>
+        => {
+            let sig = Box::new(FuncTy::new(params, rty));
+            Ty::new(Span(lo, hi), TyKind::Func(sig))
+        },
     TyPtr
 };
 

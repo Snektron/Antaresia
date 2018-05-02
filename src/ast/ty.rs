@@ -4,9 +4,8 @@ use ast::Name;
 use check::{CheckType, Unchecked};
 use utility;
 use parser::Span;
-use std::cmp::PartialEq;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Ty<C = Unchecked>
 where C: CheckType {
     pub span: Span,
@@ -44,50 +43,24 @@ where C: CheckType {
             TyKind::Void => write!(f, "void"),
             TyKind::Alias(ref name) => write!(f, "{}", name),
             TyKind::Ptr(ref pointee) => write!(f, "{}*", pointee),
-            TyKind::Func(ref ret_type, ref params) => {
-                write!(f, "func(")?;
-                utility::write_comma_seperated(f, params.iter())?;
-                write!(f, ") -> {}", ret_type)
-            },
+            TyKind::Func(ref sig) => write!(f, "{}", sig),
             TyKind::Paren(ref inner) => write!(f, "({})", inner),
         }
     }
 }
 
-impl<C> PartialEq for Ty<C>
-where C: CheckType {
-    fn eq(&self, other: &Self) -> bool {
-        self.kind.eq(&other.kind)
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TyKind<C = Unchecked>
 where C: CheckType {
     U8,
     Void,
     Alias(Name),
     Ptr(Box<Ty<C>>),
-    Func(Box<Ty<C>>, Vec<Ty<C>>),
+    Func(Box<FuncTy<C>>),
     Paren(Box<Ty<C>>) // for pretty-printing
 }
 
-impl<C> PartialEq for TyKind<C>
-where C: CheckType {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (&TyKind::U8, &TyKind::U8) => true,
-            (&TyKind::Void, &TyKind::Void) => true,
-            (&TyKind::Alias(ref l), &TyKind::Alias(ref r)) => l == r,
-            (&TyKind::Ptr(ref l), &TyKind::Ptr(ref r)) => l == r,
-            (&TyKind::Func(ref ln, ref lp), &TyKind::Func(ref rn, ref rp)) => ln == rn && lp == rp,
-            (&TyKind::Paren(ref l), &TyKind::Paren(ref r)) => l == r,
-            _ => false
-        }
-    } 
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Field<C = Unchecked>
 where C: CheckType {
     pub name: Name,
@@ -108,5 +81,31 @@ impl<C> fmt::Display for Field<C>
 where C: CheckType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}: {}", self.name, self.ty)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FuncTy<C = Unchecked>
+where C: CheckType {
+    pub params: Vec<Ty<C>>,
+    pub return_ty: Ty<C>
+}
+
+impl<C> FuncTy<C>
+where C: CheckType {
+    pub fn new(params: Vec<Ty<C>>, return_ty: Ty<C>) -> Self {
+        Self {
+            params,
+            return_ty
+        }
+    }
+}
+
+impl<C> fmt::Display for FuncTy<C>
+where C: CheckType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "func(")?;
+        utility::write_comma_seperated(f, self.params.iter())?;
+        write!(f, ") -> {}", self.return_ty)
     }
 }

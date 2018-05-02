@@ -6,7 +6,7 @@ pub use self::expr::{Expr, ExprKind, Literal, BinOpKind, UnOpKind};
 
 use check::{CheckType, Unchecked};
 use parser::Span;
-use ast::ty::{Ty, Field};
+use ast::ty::{Ty, Field, FuncTy};
 
 pub type Name = String;
 
@@ -60,6 +60,36 @@ where C: CheckType {
     While(Box<Expr<C>>, Box<Stmt<C>>),
     Return(Box<Expr<C>>),
     Expr(Box<Expr<C>>),
-    FuncDecl(Name, Box<Ty<C>>, Vec<Field<C>>, Box<Stmt<C>>),
+    FuncDecl(Box<FuncDecl>),
     StructDecl(Name, Vec<Field<C>>)
+}
+
+pub struct FuncDecl<C = Unchecked>
+where C: CheckType {
+    pub name: Name,
+    pub params: Vec<Field<C>>,
+    pub return_ty: Ty<C>,
+    pub body: Stmt<C>
+}
+
+impl<C> FuncDecl<C>
+where C: CheckType {
+    pub fn new(name: Name, params: Vec<Field<C>>, return_ty: Ty<C>, body: Stmt<C>) -> Self {
+        Self {
+            name,
+            params,
+            return_ty,
+            body
+        }
+    }
+
+    pub fn ty(&self) -> FuncTy<C> {
+        let params = self.params
+            .iter()
+            .map(|field| &field.ty)
+            .cloned()
+            .collect();
+
+        FuncTy::new(params, self.return_ty.clone())
+    }
 }

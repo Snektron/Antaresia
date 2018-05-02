@@ -2,14 +2,21 @@ use std::collections::HashMap;
 use utility::Scoped;
 use check::{CheckResult, SemanticError as SE, SemanticErrorKind as SEK};
 use check::Checked;
-use ast::ty::{Ty, TyKind, Field};
+use ast::ty::{Ty, TyKind, Field, FuncTy};
 use ast::{Name, Program};
 use ast::{Stmt, Stmts, StmtKind};
-use ast::{Expr, ExprKind};
+use ast::{Expr, ExprKind, BinOpKind, UnOpKind};
 use parser::Span;
 use utility::JoinExt;
 
 type Struct = (Span, Vec<Field<Checked>>);
+
+#[derive(Hash, PartialEq, Eq)]
+pub enum Signature {
+    Name(Name),
+    Func(Name, Vec<Ty<Checked>>),
+    Cast(Ty<Checked>), // from
+}
 
 pub struct Frame {
     bindings: HashMap<Name, Ty<Checked>>,
@@ -75,19 +82,12 @@ impl<'s> Checker<'s> {
     pub fn forward_declare(&mut self, unchecked: &Stmts) -> CheckResult<()> {
         for stmt in unchecked {
             match stmt.kind {
-                StmtKind::FuncDecl(ref name, ref rty, ref params, _) => {
-                    {
-                        let mut scope = self.enter();
-
-                        params
-                            .into_iter()
-                            .map(|field| &field.ty)
-                            .cloned()
-                            .map(|ty| scope.check_ty(ty))
-                            .collect::<CheckResult<_>>()
-                            .join(scope.check_ty(*rty.clone()))
-                            .map(|(params, rty)| Ty::new(stmt.span.clone(), TyKind::Func(Box::new(rty), params)))
-                    }.and_then(|ty| self.declare_binding(name.clone(), ty))?;
+                StmtKind::FuncDecl(ref decl) => {
+                    let ty = self.enter()
+                        .check_func_ty(decl.ty())
+                        .map(|sig| Ty::new(stmt.span.clone(), TyKind::Func(Box::new(sig))));
+                    // close scope
+                    ty.and_then(|ty| self.declare_binding(decl.name.clone(), ty))?;
                 },
                 StmtKind::StructDecl(ref name, ref fields) => {
                     self.check_fields(fields.to_vec())
@@ -163,12 +163,9 @@ impl<'s> Checker<'s> {
                 self.check_ty(*inner)
                     .map(|ty| TyKind::Ptr(Box::new(ty)))
             },
-            TyKind::Func(rty, params) => {
-                params.into_iter()
-                    .map(|par| self.check_ty(par))
-                    .collect::<CheckResult<_>>()
-                    .join(self.check_ty(*rty))
-                    .map(|(params, rty)| TyKind::Func(Box::new(rty), params))
+            TyKind::Func(func) => {
+                self.check_func_ty(*func)
+                    .map(|func| TyKind::Func(Box::new(func)))
             },
             TyKind::Paren(inner) => {
                 self.check_ty(*inner)
@@ -184,6 +181,12 @@ impl<'s> Checker<'s> {
             .into_iter()
             .map(|ty| self.check_ty(ty))
             .collect()
+    }
+
+    pub fn check_func_ty(&self, unchecked: FuncTy) -> CheckResult<FuncTy<Checked>> {
+        self.check_tys(unchecked.params)
+            .join(self.check_ty(unchecked.return_ty))
+            .map(|(params, return_ty)| FuncTy::new(params, return_ty))
     }
 
     pub fn check_field(&mut self, unchecked: Field) -> CheckResult<Field<Checked>> {

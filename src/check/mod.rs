@@ -1,4 +1,5 @@
 pub mod typecheck;
+pub mod environment;
 
 use std::error::Error;
 use std::fmt;
@@ -8,7 +9,7 @@ use parser::Span;
 
 pub type CheckResult<T> = Result<T, SemanticError>;
 
-pub trait CheckType {
+pub trait CheckType: Clone + PartialEq {
     type ExprInfo;
 }
 

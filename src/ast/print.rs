@@ -100,14 +100,14 @@ where C: CheckType {
                 p.node(1, "Expr");
                 expr.print(p);
             },
-            StmtKind::FuncDecl(ref name, ref rtype, ref params, ref body) => {
-                p.node(1 + params.len(), format!("FuncDecl({} -> {})", name, rtype));
+            StmtKind::FuncDecl(ref decl) => {
+                p.node(1 + decl.params.len(), format!("FuncDecl({} -> {})", decl.name, decl.return_ty));
 
-                for param in params {
+                for param in decl.params.iter() {
                     p.leaf(format!("Param({})", param));
                 }
 
-                body.print(p);
+                decl.body.print(p);
             },
             StmtKind::StructDecl(ref name, ref fields) => {
                 p.node(fields.len(), format!("StructDecl({})", name));
