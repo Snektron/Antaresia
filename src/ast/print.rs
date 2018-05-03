@@ -150,6 +150,10 @@ where C: CheckType {
                 p.node(1, format!("Cast({})", dt));
                 lhs.print(p);
             },
+            ExprKind::ImplicitCast(ref lhs, ref dt) => {
+                p.node(1, format!("ImplicitCast({})", dt));
+                lhs.print(p);
+            },
             ExprKind::Literal(ref x) => p.leaf(format!("Literal({:?})", x)),
             ExprKind::Name(ref name) => p.leaf(format!("Name(name = {})", name)),
             ExprKind::Decl(ref field, ref val) => {

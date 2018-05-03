@@ -44,6 +44,7 @@ where C: CheckType {
     Call(Box<Expr<C>>, Vec<Expr<C>>),
     Subscript(Box<Expr<C>>, Box<Expr<C>>),
     Cast(Box<Expr<C>>, Ty<C>),
+    ImplicitCast(Box<Expr<C>>, Ty<C>),
     Literal(Literal),
     Name(Name),
     Decl(Field<C>, Option<Box<Expr<C>>>),

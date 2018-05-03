@@ -48,7 +48,7 @@ impl Error for SemanticError {
             SemanticErrorKind::Redefinition(..) => "redefinition",
             SemanticErrorKind::Undefined(..) => "undefined",
             SemanticErrorKind::IllegalStatement => "illegal statement",
-            SemanticErrorKind::InvalidReturnType(..) => "invalid return type",
+            SemanticErrorKind::TypeError(..) => "type error",
             SemanticErrorKind::InvalidBinary(..) => "invalid operands for binary operator",
             SemanticErrorKind::InvalidUnary(..) => "invalid operands for unary operator",
         }
@@ -60,7 +60,7 @@ pub enum SemanticErrorKind {
     Redefinition(Span, Name),
     Undefined(Name),
     IllegalStatement,
-    InvalidReturnType(Ty<Checked>, Ty<Checked>),
+    TypeError(Ty<Checked>, Ty<Checked>),
     InvalidBinary(BinOpKind, Ty<Checked>, Ty<Checked>),
     InvalidUnary(UnOpKind, Ty<Checked>),
 }
@@ -69,16 +69,16 @@ impl fmt::Display for SemanticError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.kind {
             SemanticErrorKind::Redefinition(ref origin, ref name) => {
-                write!(f, "{}: Redefinition error: '{}' is already defined at {}", self.span.0, name, origin.0)
+                write!(f, "{}: Redefinition: '{}' is already defined at {}", self.span.0, name, origin.0)
             },
             SemanticErrorKind::Undefined(ref name) => {
                 write!(f, "{}: Undefined variable or type '{}'", self.span.0, name)
             },
             SemanticErrorKind::IllegalStatement => {
-                write!(f, "{}: Illegal statement error: statement is not allowed here", self.span.0)
+                write!(f, "{}: Illegal statement: statement is not allowed here", self.span.0)
             },
-            SemanticErrorKind::InvalidReturnType(ref expected, ref actual) => {
-                write!(f, "{}: Invalid return type: expected '{}' as defined at {}, found '{}'", self.span.0, expected, expected.span.0, actual)
+            SemanticErrorKind::TypeError(ref expected, ref actual) => {
+                write!(f, "{}: Type error: expected '{}', found '{}'", self.span.0, expected, actual)
             },
             SemanticErrorKind::InvalidBinary(ref op, ref lhs, ref rhs) => {
                 write!(f, "{}: Invalid arguments '{}' and '{}' to binary operator {}", self.span.0, lhs, rhs, op)

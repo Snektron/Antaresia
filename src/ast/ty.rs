@@ -4,8 +4,9 @@ use ast::Name;
 use check::{CheckType, Unchecked};
 use utility;
 use parser::Span;
+use std::cmp::PartialEq;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Ty<C = Unchecked>
 where C: CheckType {
     pub span: Span,
@@ -32,6 +33,13 @@ where C: CheckType {
 
     pub fn reference(self) -> Self {
         Ty::new(self.span.clone(), TyKind::Ptr(Box::new(self)))
+    }
+}
+
+impl<C> PartialEq for Ty<C>
+where C: CheckType {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind
     }
 }
 

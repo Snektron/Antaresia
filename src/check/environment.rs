@@ -22,20 +22,20 @@ impl Frame {
     }
 }
 
-pub struct Environment {
+pub struct Environment<'s> {
     scope: Scoped<'s, Frame>
 }
 
-impl Environment {
+impl<'s> Environment<'s> {
     pub fn new() -> Self {
         Self {
             scope: Scoped::new(Frame::new())
         }
     }
 
-    pub fn enter(&self) -> Self {
-        Self {
-            scope: scope.enter_with(Frame::new())
+    pub fn enter<'a>(&'a self) -> Environment<'a> {
+        Environment {
+            scope: self.scope.enter_with(Frame::new())
         }
     }
 
@@ -68,5 +68,4 @@ impl Environment {
             .find(|frame| frame.aliases.get(name))
             .map(|&(_, ref fields)| fields)
     }
-
 }

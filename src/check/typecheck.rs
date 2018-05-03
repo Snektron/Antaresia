@@ -1,22 +1,14 @@
 use std::collections::HashMap;
-use utility::Scoped;
-use check::{CheckResult, SemanticError as SE, SemanticErrorKind as SEK};
-use check::Checked;
+use utility::JoinExt;
+use check::{Checked, CheckResult, SemanticError as SE, SemanticErrorKind as SEK};
+use check::environment::Environment;
 use ast::ty::{Ty, TyKind, Field, FuncTy};
 use ast::{Name, Program};
 use ast::{Stmt, Stmts, StmtKind};
 use ast::{Expr, ExprKind, BinOpKind, UnOpKind};
 use parser::Span;
-use utility::JoinExt;
 
 type Struct = (Span, Vec<Field<Checked>>);
-
-#[derive(Hash, PartialEq, Eq)]
-pub enum Signature {
-    Name(Name),
-    Func(Name, Vec<Ty<Checked>>),
-    Cast(Ty<Checked>), // from
-}
 
 pub struct Frame {
     bindings: HashMap<Name, Ty<Checked>>,
@@ -32,51 +24,21 @@ impl Frame {
     }
 }
 
-pub struct Checker<'s> {
-    scope: Scoped<'s, Frame>
+pub struct Checker<'e> {
+    env: Environment<'e>
 }
 
-impl<'s> Checker<'s> {
+impl<'e> Checker<'e> {
     pub fn new() -> Self {
         Checker {
-            scope: Scoped::new(Frame::new())
+            env: Environment::new()
         }
     }
 
     fn enter<'a>(&'a self) -> Checker<'a> {
         Checker {
-            scope: self.scope.enter_with(Frame::new())
+            env: self.env.enter()
         }
-    }
-
-    fn declare_binding(&mut self, name: Name, ty: Ty<Checked>) -> CheckResult<()> {
-        let span = ty.span.clone();
-
-        self.scope.bindings
-            .insert(name.clone(), ty)
-            .map_or(Ok(()), |ref existing| {
-                Err(SE::new(span, SEK::Redefinition(existing.span.clone(), name)))
-            })
-    }
-
-    fn declare_struct(&mut self, alias: Name, target: Struct) -> CheckResult<()> {
-        let span = target.0.clone();
-
-        self.scope.aliases
-            .insert(alias.clone(), target)
-            .map_or(Ok(()), |ref existing| {
-                Err(SE::new(span, SEK::Redefinition(existing.0.clone(), alias)))
-            })
-    }
-
-    fn get_binding(&self, name: &Name) -> Option<&Ty<Checked>> {
-        self.scope.find(|frame| frame.bindings.get(name))
-    }
-
-    fn get_struct(&self, name: &Name) -> Option<&Vec<Field<Checked>>> {
-        self.scope
-            .find(|frame| frame.aliases.get(name))
-            .map(|&(_, ref fields)| fields)
     }
 
     pub fn forward_declare(&mut self, unchecked: &Stmts) -> CheckResult<()> {
@@ -87,17 +49,21 @@ impl<'s> Checker<'s> {
                         .check_func_ty(decl.ty())
                         .map(|sig| Ty::new(stmt.span.clone(), TyKind::Func(Box::new(sig))));
                     // close scope
-                    ty.and_then(|ty| self.declare_binding(decl.name.clone(), ty))?;
+                    ty.and_then(|ty| self.env.declare_binding(decl.name.clone(), ty))?;
                 },
                 StmtKind::StructDecl(ref name, ref fields) => {
                     self.check_fields(fields.to_vec())
-                        .and_then(|fields| self.declare_struct(name.clone(), (stmt.span.clone(), fields)))?;
+                        .and_then(|fields| self.env.declare_struct(name.clone(), (stmt.span.clone(), fields)))?;
                 },
                 _ => {}
             }
         }
 
         Ok(())
+    }
+
+    pub fn convert(&mut self, actual: Ty<Checked>, expected: &Ty<Checked>) -> CheckResult<Ty<Checked>> {
+        Err(SE::new(actual.span.clone(), SEK::TypeError(expected.clone(), actual)))
     }
 
     pub fn check_program(&mut self, unchecked: Program) -> CheckResult<Program<Checked>> {
@@ -129,16 +95,43 @@ impl<'s> Checker<'s> {
             .map(|stmt| self.check_stmt(stmt))
             .collect()
     }
-
+    
     pub fn check_expr(&mut self, unchecked: Expr) -> CheckResult<Expr<Checked>> {
         let span = unchecked.span;
         let checked = match unchecked.kind {
+            ExprKind::Binary(op, lhs, rhs) => {
+                let lhs = self.check_expr(*lhs)?;
+                let rhs = self.check_expr(*rhs)?;
+
+                Err(SE::new(span.clone(), SEK::IllegalStatement))
+            },
+            ExprKind::Literal(lit) => {
+                let ty = lit.ty();
+                Ok((ExprKind::Literal(lit), ty))
+            },
+            ExprKind::Name(name) => {
+                self.env
+                    .get_binding(&name)
+                    .cloned()
+                    .ok_or(SE::new(span.clone(), SEK::Undefined(name.clone())))
+                    .map(|ty| (ExprKind::Name(name), ty))
+            },
             _ => {
                 Err(SE::new(span.clone(), SEK::IllegalStatement))
             }
         };
 
         checked.map(|(kind, result)| Expr::new(span, kind, result))
+    }
+
+    pub fn check_expr_expected(&mut self, unchecked: Expr, expected: &Ty<Checked>) -> CheckResult<Expr<Checked>> {
+        let expr = self.check_expr(unchecked)?;
+
+        if expr.info != *expected {
+            return Err(SE::new(expr.span, SEK::TypeError(expected.clone(), expr.info)))
+        }
+
+        Ok(expr)
     }
 
     pub fn check_exprs(&mut self, unchecked: Vec<Expr>) -> CheckResult<Vec<Expr<Checked>>> {
@@ -155,7 +148,8 @@ impl<'s> Checker<'s> {
             TyKind::U8 => Ok(TyKind::U8),  // TODO: Builtin type variant
             TyKind::Void => Ok(TyKind::Void),
             TyKind::Alias(name) => {
-                self.get_struct(&name)
+                self.env
+                    .get_struct(&name)
                     .map(|_| TyKind::Alias(name.clone()))
                     .ok_or(SE::new(span.clone(), SEK::Undefined(name)))
             },
@@ -193,7 +187,7 @@ impl<'s> Checker<'s> {
         let name = unchecked.name;
         
         self.check_ty(unchecked.ty)
-            .and_then(|ty| self.declare_binding(name.clone(), ty.clone()).and(Ok(ty)))
+            .and_then(|ty| self.env.declare_binding(name.clone(), ty.clone()).and(Ok(ty)))
             .map(|dt| Field::new(name, dt))
     }
 
