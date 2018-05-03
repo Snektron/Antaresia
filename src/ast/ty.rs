@@ -24,6 +24,10 @@ where C: CheckType {
         }
     }
 
+    pub fn void(span: Span) -> Ty<C> {
+        Ty::new(span, TyKind::Void)
+    }
+
     pub fn dereference(self) -> Option<Ty<C>> {
         match self.kind {
             TyKind::Ptr(pointee) => Some(*pointee),

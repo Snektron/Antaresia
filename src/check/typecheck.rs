@@ -63,7 +63,7 @@ impl<'e> Checker<'e> {
     }
 
     pub fn implicit_convert(&mut self, actual: Expr<Checked>, expected: &Ty<Checked>) -> CheckResult<Expr<Checked>> {
-        Err(SE::new(actual.span.clone(), SEK::TypeError(expected.clone(), actual.info)))
+        unimplemented!()
     }
 
     pub fn check_program(&mut self, unchecked: Program) -> CheckResult<Program<Checked>> {
@@ -84,7 +84,7 @@ impl<'e> Checker<'e> {
     }
 
     pub fn check_stmt(&mut self, unchecked: Stmt) -> CheckResult<Stmt<Checked>> {
-        Err(SE::new(unchecked.span, SEK::IllegalStatement))
+        unimplemented!()
     }
 
     pub fn check_stmts(&mut self, unchecked: Stmts) -> CheckResult<Stmts<Checked>> {
@@ -106,22 +106,30 @@ impl<'e> Checker<'e> {
                 Err(SE::new(span.clone(), SEK::IllegalStatement))
             },
             ExprKind::Call(callee, args) => self.check_call(*callee, args),
-            ExprKind::Literal(lit) => {
-                let ty = lit.ty();
-                Ok((ty, ExprKind::Literal(lit)))
-            },
+            ExprKind::Literal(lit) => Ok((lit.ty(), ExprKind::Literal(lit))),
             ExprKind::Name(name) => {
                 self.env
                     .get_binding(&name)
                     .cloned()
                     .ok_or(SE::new(span.clone(), SEK::Undefined(name.clone())))
-                    .map(|ty| (ty, ExprKind::Name(name)))
+                    .join(Ok(ExprKind::Name(name)))
             },
-            // ExprKind::Decl(field, None) => {
+            ExprKind::Decl(field, Some(expr)) => {
+                let field = self.check_field(field)?;
+                let expr = self
+                    .check_expr(*expr)
+                    .and_then(|e| self.expect_expr(e, &field.ty))?;
 
-            // },
+                let kind = ExprKind::Decl(field, Some(Box::new(expr)));
+                Ok((Ty::void(span.clone()), kind))
+            },
+            ExprKind::Decl(field, None) => {
+                self.check_field(field)
+                    .map(|field| ExprKind::Decl(field, None))
+                    .map(|kind| (Ty::void(span.clone()), kind))
+            },
             _ => {
-                Err(SE::new(span.clone(), SEK::IllegalStatement))
+                unimplemented!()
             }
         };
 
@@ -145,13 +153,7 @@ impl<'e> Checker<'e> {
                 .check_exprs(args)?
                 .into_iter()
                 .zip(func.params.iter())
-                .map(|(arg, param_ty)| {
-                    if &arg.info != param_ty {
-                        self.implicit_convert(arg, param_ty)
-                    } else {
-                        Ok(arg)
-                    }
-                })
+                .map(|(arg, param_ty)| self.expect_expr(arg, param_ty))
                 .collect::<CheckResult<_>>()?;
             Ok((return_ty, args))
         } else {
@@ -161,15 +163,13 @@ impl<'e> Checker<'e> {
         func.map(|(return_ty, args)| (return_ty, ExprKind::Call(Box::new(callee), args)))
     }
 
-    // pub fn expect_expr(&mut self, unchecked: Expr, expected: &Ty<Checked>) -> CheckResult<Expr<Checked>> {
-    //     let expr = self.check_expr(unchecked)?;
-
-    //     if expr.info != *expected {
-    //         return Err(SE::new(expr.span, SEK::TypeError(expected.clone(), expr.info)))
-    //     }
-
-    //     Ok(expr)
-    // }
+    pub fn expect_expr(&mut self, expr: Expr<Checked>, expected: &Ty<Checked>) -> CheckResult<Expr<Checked>> {
+        if &expr.info != expected {
+            self.implicit_convert(expr, expected)
+        } else {
+            Ok(expr)
+        }
+    }
 
     pub fn check_ty(&self, unchecked: Ty) -> CheckResult<Ty<Checked>> {
         let span = unchecked.span;
@@ -212,7 +212,7 @@ impl<'e> Checker<'e> {
             .into_iter()
             .map(|ty| self.check_ty(ty))
             .map(|ty| {
-                ty.test_or(|ty| ty.is_void(), |ty| {
+                ty.test_or(|ty| !ty.is_void(), |ty| {
                     SE::new(ty.span, SEK::ParameterDeclaredVoid)
                 })
             })
@@ -229,7 +229,7 @@ impl<'e> Checker<'e> {
         let name = unchecked.name;
         
         self.check_ty(unchecked.ty)
-            .test_or(|ty| ty.is_void(), |ty| {
+            .test_or(|ty| !ty.is_void(), |ty| {
                 SE::new(ty.span, SEK::FieldDeclaredVoid(name.clone()))
             })
             .and_then(|ty| self.env.declare_binding(name.clone(), ty.clone()).and(Ok(ty)))
