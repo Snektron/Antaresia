@@ -51,7 +51,7 @@ where C: CheckType {
             TyKind::Void => write!(f, "void"),
             TyKind::Alias(ref name) => write!(f, "{}", name),
             TyKind::Ptr(ref pointee) => write!(f, "{}*", pointee),
-            TyKind::Func(ref sig) => write!(f, "{}", sig),
+            TyKind::Func(ref func) => write!(f, "{}", func),
             TyKind::Paren(ref inner) => write!(f, "({})", inner),
         }
     }

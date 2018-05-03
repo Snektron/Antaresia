@@ -51,6 +51,7 @@ impl Error for SemanticError {
             SemanticErrorKind::TypeError(..) => "type error",
             SemanticErrorKind::InvalidBinary(..) => "invalid operands for binary operator",
             SemanticErrorKind::InvalidUnary(..) => "invalid operands for unary operator",
+            SemanticErrorKind::NotAFunction(..) => "not a function"
         }
     }
 }
@@ -63,29 +64,34 @@ pub enum SemanticErrorKind {
     TypeError(Ty<Checked>, Ty<Checked>),
     InvalidBinary(BinOpKind, Ty<Checked>, Ty<Checked>),
     InvalidUnary(UnOpKind, Ty<Checked>),
+    NotAFunction(Ty<Checked>)
 }
 
 impl fmt::Display for SemanticError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}: ", self.span.0)?;
         match self.kind {
             SemanticErrorKind::Redefinition(ref origin, ref name) => {
-                write!(f, "{}: Redefinition: '{}' is already defined at {}", self.span.0, name, origin.0)
+                write!(f, "Redefinition: '{}' is already defined at {}", name, origin.0)
             },
             SemanticErrorKind::Undefined(ref name) => {
-                write!(f, "{}: Undefined variable or type '{}'", self.span.0, name)
+                write!(f, "Undefined variable or type '{}'", name)
             },
             SemanticErrorKind::IllegalStatement => {
-                write!(f, "{}: Illegal statement: statement is not allowed here", self.span.0)
+                write!(f, "Illegal statement: statement is not allowed here")
             },
             SemanticErrorKind::TypeError(ref expected, ref actual) => {
-                write!(f, "{}: Type error: expected '{}', found '{}'", self.span.0, expected, actual)
+                write!(f, "Type error: expected '{}', found '{}'", expected, actual)
             },
             SemanticErrorKind::InvalidBinary(ref op, ref lhs, ref rhs) => {
-                write!(f, "{}: Invalid arguments '{}' and '{}' to binary operator {}", self.span.0, lhs, rhs, op)
+                write!(f, "Invalid arguments '{}' and '{}' to binary operator {}", lhs, rhs, op)
             },
             SemanticErrorKind::InvalidUnary(ref op, ref lhs) => {
-                write!(f, "{}: Invalid argument '{}' to unary operator {}", self.span.0, lhs, op)
+                write!(f, "Invalid argument '{}' to unary operator {}", lhs, op)
             },
+            SemanticErrorKind::NotAFunction(ref actual) => {
+                write!(f, "Not a function: expected function, found '{}'", actual)
+            }
         }
     }
 }

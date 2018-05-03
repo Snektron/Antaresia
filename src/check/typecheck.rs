@@ -62,8 +62,8 @@ impl<'e> Checker<'e> {
         Ok(())
     }
 
-    pub fn convert(&mut self, actual: Ty<Checked>, expected: &Ty<Checked>) -> CheckResult<Ty<Checked>> {
-        Err(SE::new(actual.span.clone(), SEK::TypeError(expected.clone(), actual)))
+    pub fn implicit_convert(&mut self, actual: Expr<Checked>, expected: &Ty<Checked>) -> CheckResult<Expr<Checked>> {
+        Err(SE::new(actual.span.clone(), SEK::TypeError(expected.clone(), actual.info)))
     }
 
     pub fn check_program(&mut self, unchecked: Program) -> CheckResult<Program<Checked>> {
@@ -105,33 +105,24 @@ impl<'e> Checker<'e> {
 
                 Err(SE::new(span.clone(), SEK::IllegalStatement))
             },
+            ExprKind::Call(callee, args) => self.check_call(*callee, args),
             ExprKind::Literal(lit) => {
                 let ty = lit.ty();
-                Ok((ExprKind::Literal(lit), ty))
+                Ok((ty, ExprKind::Literal(lit)))
             },
             ExprKind::Name(name) => {
                 self.env
                     .get_binding(&name)
                     .cloned()
                     .ok_or(SE::new(span.clone(), SEK::Undefined(name.clone())))
-                    .map(|ty| (ExprKind::Name(name), ty))
+                    .map(|ty| (ty, ExprKind::Name(name)))
             },
             _ => {
                 Err(SE::new(span.clone(), SEK::IllegalStatement))
             }
         };
 
-        checked.map(|(kind, result)| Expr::new(span, kind, result))
-    }
-
-    pub fn check_expr_expected(&mut self, unchecked: Expr, expected: &Ty<Checked>) -> CheckResult<Expr<Checked>> {
-        let expr = self.check_expr(unchecked)?;
-
-        if expr.info != *expected {
-            return Err(SE::new(expr.span, SEK::TypeError(expected.clone(), expr.info)))
-        }
-
-        Ok(expr)
+        checked.map(|(result_ty, kind)| Expr::new(span, kind, result_ty))
     }
 
     pub fn check_exprs(&mut self, unchecked: Vec<Expr>) -> CheckResult<Vec<Expr<Checked>>> {
@@ -140,6 +131,42 @@ impl<'e> Checker<'e> {
             .map(|expr| self.check_expr(expr))
             .collect()
     }
+
+    pub fn check_call(&mut self, callee: Expr, args: Vec<Expr>) -> CheckResult<(Ty<Checked>, ExprKind<Checked>)> {
+        let callee = self.check_expr(callee)?;
+
+        let func = if let TyKind::Func(ref func) = callee.info.kind {
+            let return_ty = func.return_ty.clone();
+
+            let args = self
+                .check_exprs(args)?
+                .into_iter()
+                .zip(func.params.iter())
+                .map(|(arg, param_ty)| {
+                    if &arg.info != param_ty {
+                        self.implicit_convert(arg, param_ty)
+                    } else {
+                        Ok(arg)
+                    }
+                })
+                .collect::<CheckResult<_>>()?;
+            Ok((return_ty, args))
+        } else {
+            Err(SE::new(callee.span.clone(), SEK::NotAFunction(callee.info.clone())))
+        };
+
+        func.map(|(return_ty, args)| (return_ty, ExprKind::Call(Box::new(callee), args)))
+    }
+
+    // pub fn expect_expr(&mut self, unchecked: Expr, expected: &Ty<Checked>) -> CheckResult<Expr<Checked>> {
+    //     let expr = self.check_expr(unchecked)?;
+
+    //     if expr.info != *expected {
+    //         return Err(SE::new(expr.span, SEK::TypeError(expected.clone(), expr.info)))
+    //     }
+
+    //     Ok(expr)
+    // }
 
     pub fn check_ty(&self, unchecked: Ty) -> CheckResult<Ty<Checked>> {
         let span = unchecked.span;
