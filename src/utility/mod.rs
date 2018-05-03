@@ -55,3 +55,29 @@ impl<T, U, E> JoinExt<U> for Result<T, E> {
         self.and_then(|x| other().map(|y| (x, y)))
     }
 }
+
+pub trait TestExt<T, E> {
+    fn test<P>(self, pred: P, err: E) -> Result<T, E>
+    where Self: Sized,
+          P: FnOnce(&T) -> bool {
+        self.test_or(pred, |_| err)
+    }
+
+    fn test_or<P, F>(self, pred: P, err: F) -> Result<T, E>
+    where P: FnOnce(&T) -> bool,
+          F: FnOnce(T) -> E;
+}
+
+impl<T, E> TestExt<T, E> for Result<T, E> {
+    fn test_or<P, F>(self, pred: P, err: F) -> Result<T, E>
+    where P: FnOnce(&T) -> bool,
+          F: FnOnce(T) -> E {
+        self.and_then(|x| {
+            if pred(&x) {
+                Ok(x)
+            } else {
+                Err(err(x))
+            }
+        })
+    }
+}

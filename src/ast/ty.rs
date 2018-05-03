@@ -16,7 +16,7 @@ where C: CheckType {
 
 impl<C> Ty<C>
 where C: CheckType {
-    pub fn new(span: Span, kind: TyKind<C>) -> Self {
+    pub fn new(span: Span, kind: TyKind<C>) -> Ty<C> {
         Ty {
             span,
             kind,
@@ -24,15 +24,22 @@ where C: CheckType {
         }
     }
 
-    pub fn dereference(self) -> Option<Self> {
+    pub fn dereference(self) -> Option<Ty<C>> {
         match self.kind {
             TyKind::Ptr(pointee) => Some(*pointee),
             _ => None
         }
     }
 
-    pub fn reference(self) -> Self {
+    pub fn reference(self) -> Ty<C> {
         Ty::new(self.span.clone(), TyKind::Ptr(Box::new(self)))
+    }
+
+    pub fn is_void(&self) -> bool {
+        match self.kind {
+            TyKind::Void => true,
+            _ => false
+        }
     }
 }
 

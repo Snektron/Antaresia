@@ -51,7 +51,9 @@ impl Error for SemanticError {
             SemanticErrorKind::TypeError(..) => "type error",
             SemanticErrorKind::InvalidBinary(..) => "invalid operands for binary operator",
             SemanticErrorKind::InvalidUnary(..) => "invalid operands for unary operator",
-            SemanticErrorKind::NotAFunction(..) => "not a function"
+            SemanticErrorKind::NotAFunction(..) => "callee is not a function",
+            SemanticErrorKind::FieldDeclaredVoid(..) => "field declared void",
+            SemanticErrorKind::ParameterDeclaredVoid => "parameter declared void"
         }
     }
 }
@@ -64,7 +66,9 @@ pub enum SemanticErrorKind {
     TypeError(Ty<Checked>, Ty<Checked>),
     InvalidBinary(BinOpKind, Ty<Checked>, Ty<Checked>),
     InvalidUnary(UnOpKind, Ty<Checked>),
-    NotAFunction(Ty<Checked>)
+    NotAFunction(Ty<Checked>),
+    FieldDeclaredVoid(Name),
+    ParameterDeclaredVoid
 }
 
 impl fmt::Display for SemanticError {
@@ -90,7 +94,13 @@ impl fmt::Display for SemanticError {
                 write!(f, "Invalid argument '{}' to unary operator {}", lhs, op)
             },
             SemanticErrorKind::NotAFunction(ref actual) => {
-                write!(f, "Not a function: expected function, found '{}'", actual)
+                write!(f, "Type error: expected function, found '{}'", actual)
+            },
+            SemanticErrorKind::FieldDeclaredVoid(ref field) => {
+                write!(f, "Field '{}' cannot have type void", field)
+            }
+            SemanticErrorKind::ParameterDeclaredVoid => {
+                write!(f, "Parameter cannot have type void")
             }
         }
     }

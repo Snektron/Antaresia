@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use utility::JoinExt;
+use utility::{JoinExt, TestExt};
 use check::{Checked, CheckResult, SemanticError as SE, SemanticErrorKind as SEK};
 use check::environment::Environment;
 use ast::ty::{Ty, TyKind, Field, FuncTy};
@@ -117,6 +117,9 @@ impl<'e> Checker<'e> {
                     .ok_or(SE::new(span.clone(), SEK::Undefined(name.clone())))
                     .map(|ty| (ty, ExprKind::Name(name)))
             },
+            // ExprKind::Decl(field, None) => {
+
+            // },
             _ => {
                 Err(SE::new(span.clone(), SEK::IllegalStatement))
             }
@@ -204,8 +207,20 @@ impl<'e> Checker<'e> {
             .collect()
     }
 
+    pub fn check_param_tys(&self, unchecked: Vec<Ty>) -> CheckResult<Vec<Ty<Checked>>> {
+        unchecked
+            .into_iter()
+            .map(|ty| self.check_ty(ty))
+            .map(|ty| {
+                ty.test_or(|ty| ty.is_void(), |ty| {
+                    SE::new(ty.span, SEK::ParameterDeclaredVoid)
+                })
+            })
+            .collect()
+    }
+
     pub fn check_func_ty(&self, unchecked: FuncTy) -> CheckResult<FuncTy<Checked>> {
-        self.check_tys(unchecked.params)
+        self.check_param_tys(unchecked.params)
             .join(self.check_ty(unchecked.return_ty))
             .map(|(params, return_ty)| FuncTy::new(params, return_ty))
     }
@@ -214,6 +229,9 @@ impl<'e> Checker<'e> {
         let name = unchecked.name;
         
         self.check_ty(unchecked.ty)
+            .test_or(|ty| ty.is_void(), |ty| {
+                SE::new(ty.span, SEK::FieldDeclaredVoid(name.clone()))
+            })
             .and_then(|ty| self.env.declare_binding(name.clone(), ty.clone()).and(Ok(ty)))
             .map(|dt| Field::new(name, dt))
     }
