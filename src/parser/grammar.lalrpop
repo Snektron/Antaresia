@@ -9,23 +9,23 @@ grammar;
 Box<T>: Box<T> = T => Box::new(<>);
 
 Binary<Op, Next>: Expr = {
-    <lo:@L> <lhs:Box<Binary<Op, Next>>> <o:Op> <rhs:Box<Next>> <hi:@R>
-        => Expr::unchecked(Span(lo, hi), ExprKind::Binary(o, lhs, rhs)),
+    <lo:@L> <lhs:Box<Binary<Op, Next>>> <o:Op> <rhs:Box<Next>> <hi:@R> =>
+        Expr::unchecked(Span(lo, hi), ExprKind::Binary(o, lhs, rhs)),
+
     Next
 };
 
-List<T>: Vec<T> = <a:(<T> ",")*> <b:T>
-    => {
-        let mut a = a;
-        a.push(b);
-        a
-    };
+List<T>: Vec<T> = <a:(<T> ",")*> <b:T> => {
+    let mut a = a;
+    a.push(b);
+    a
+};
 
-OptList<T>: Vec<T> = List<T>?
-    => <>.unwrap_or(Vec::new());
+OptList<T>: Vec<T> = List<T>? =>
+    <>.unwrap_or(Vec::new());
 
-pub Program: Program = <lo:@L> <v:Stmt*> <hi:@R>
-    => Program::new(Span(lo, hi), v);
+pub Program: Program = <lo:@L> <v:Stmt*> <hi:@R> =>
+    Program::new(Span(lo, hi), v);
 
 Stmt: Stmt = {
     CompoundStmt,
@@ -35,87 +35,90 @@ Stmt: Stmt = {
     ShortFnDeclStmt,
     TypeDeclStmt,
     ReturnStmt,
-    <lo:@L> <e:Box<Expr>> ";" <hi:@R>
-        => Stmt::new(Span(lo, hi), StmtKind::Expr(e))
+    ExprStmt
 };
 
-CompoundStmt: Stmt = <lo:@L> "{" <v:Stmt*> "}" <hi:@R>
-    => Stmt::new(Span(lo, hi), StmtKind::Compound(v));
+CompoundStmt: Stmt = <lo:@L> "{" <v:Stmt*> "}" <hi:@R> =>
+    Stmt::new(Span(lo, hi), StmtKind::Compound(v));
 
-WhileStmt: Stmt = <lo:@L> "while" <cond:Box<Expr>> <csq:Box<CompoundStmt>> <hi:@R>
-    => Stmt::new(Span(lo, hi), StmtKind::While(cond, csq));
+WhileStmt: Stmt = <lo:@L> "while" <cond:Box<Expr>> <csq:Box<CompoundStmt>> <hi:@R> =>
+    Stmt::new(Span(lo, hi), StmtKind::While(cond, csq));
 
-IfStmt: Stmt = <lo:@L> "if" <cond:Box<Expr>> <csq:Box<CompoundStmt>> <alt:("else" <Box<IfOrBlock>>)?> <hi:@R>
-    => Stmt::new(Span(lo, hi), StmtKind::If(cond, csq, alt));
+IfStmt: Stmt = <lo:@L> "if" <cond:Box<Expr>> <csq:Box<CompoundStmt>> <alt:("else" <Box<IfOrBlock>>)?> <hi:@R> =>
+    Stmt::new(Span(lo, hi), StmtKind::If(cond, csq, alt));
 
 IfOrBlock = {
     CompoundStmt,
     IfStmt
 };
 
-ReturnStmt: Stmt = <lo:@L> "return" <e:Box<Expr>> ";" <hi:@L>
-    => Stmt::new(Span(lo, hi), StmtKind::Return(e));
+ReturnStmt: Stmt = <lo:@L> "return" <e:Box<Expr>> ";" <hi:@L> =>
+    Stmt::new(Span(lo, hi), StmtKind::Return(e));
 
 FnDeclStmt: Stmt = <lo:@L> "func" <name:Ident> "(" <params:OptList<FieldList>> ")"
-                   <rty:ReturnTy> <body:CompoundStmt> <hi:@R>
-    => {
-        let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
-        let decl = Box::new(FuncDecl::new(name, params, rty, body));
-        Stmt::new(Span(lo, hi), StmtKind::FuncDecl(decl))
-    };
+                   <rty:ReturnTy> <body:CompoundStmt> <hi:@R> => {
+    let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
+    let decl = Box::new(FuncDecl::new(name, params, rty, body));
+    Stmt::new(Span(lo, hi), StmtKind::FuncDecl(decl))
+};
 
 ShortFnDeclStmt: Stmt = <lo:@L> "func" <name:Ident> "(" <params:OptList<FieldList>> ")"
-                        <rty:ReturnTy> <blo:@L> "=" <body:Box<Expr>> ";" <hi:@R>
-    => {
-        let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
-        let body = Stmt::new(Span(blo, hi.clone()), StmtKind::Return(body));
-        let decl = Box::new(FuncDecl::new(name, params, rty, body));
-        Stmt::new(Span(lo, hi), StmtKind::FuncDecl(decl))
-    };
+                        <rty:ReturnTy> <blo:@L> "=" <body:Box<Expr>> ";" <hi:@R> => {
+    let params = params.into_iter().flat_map(|x| x.into_iter()).collect();
+    let body = Stmt::new(Span(blo, hi.clone()), StmtKind::Return(body));
+    let decl = Box::new(FuncDecl::new(name, params, rty, body));
+    Stmt::new(Span(lo, hi), StmtKind::FuncDecl(decl))
+};
 
-TypeDeclStmt: Stmt = <lo:@L> "type" <name:Ident> "=" <ty:Box<Ty>> ";" <hi:@L>
-    => {
-        Stmt::new(Span(lo, hi), StmtKind::TypeDecl(name, ty))
-    };
+TypeDeclStmt: Stmt = <lo:@L> "type" <name:Ident> "=" <ty:Box<Ty>> ";" <hi:@L> => {
+    Stmt::new(Span(lo, hi), StmtKind::TypeDecl(name, ty))
+};
 
-StructDeclStmt: Stmt = <lo:@L> "struct" <name:Ident> "{" <strukt:StructKind> "}" <hi:@L>
-    => {
-        let span = Span(lo, hi);
-        let ty = Ty::new(span.clone(), strukt);
-        Stmt::new(span, StmtKind::TypeDecl(name, Box::new(ty)))
-    };
+ExprStmt: Stmt = <lo:@L> <e:Box<Expr>> ";" <hi:@R> =>
+    Stmt::new(Span(lo, hi), StmtKind::Expr(e));
 
-Field: Field = <i:Ident> ":" <t:Ty>
-    => Field::new(i, t);
+StructDeclStmt: Stmt = <lo:@L> "struct" <name:Ident> "{" <strukt:StructKind> "}" <hi:@L> => {
+    let span = Span(lo, hi);
+    let ty = Ty::new(span.clone(), strukt);
+    Stmt::new(span, StmtKind::TypeDecl(name, Box::new(ty)))
+};
 
-FieldList: Vec<Field> = <is:List<Ident>> ":" <t:Ty>
-    => is.into_iter().map(|i| Field::new(i, t.clone())).collect();
+Field: Field = <i:Ident> ":" <t:Ty> =>
+    Field::new(i, t);
+
+FieldList: Vec<Field> = <is:List<Ident>> ":" <t:Ty> =>
+    is.into_iter().map(|i| Field::new(i, t.clone())).collect();
 
 Expr = Declaration;
 
 Declaration: Expr = {
-    <lo:@L> <field:Field> <val:("=" <Box<Declaration>>)?> <hi:@R>
-        => Expr::unchecked(Span(lo, hi), ExprKind::Decl(field, val)),
+    <lo:@L> <field:Field> <val:("=" <Box<Declaration>>)?> <hi:@R> =>
+        Expr::unchecked(Span(lo, hi), ExprKind::Decl(field, val)),
+
     Assignment
 };
 
 Assignment = Binary<AssignmentKind, Cast>;
-AssignmentKind: BinOpKind = "="
-    => BinOpKind::Assign;
+
+AssignmentKind: BinOpKind = "=" =>
+    BinOpKind::Assign;
 
 Cast = {
-    <lo:@L> <lhs:Box<Cast>> "as" <dt:Ty> <hi:@R>
-        => Expr::unchecked(Span(lo, hi), ExprKind::Cast(lhs, dt)),
+    <lo:@L> <lhs:Box<Cast>> "as" <dt:Ty> <hi:@R> =>
+        Expr::unchecked(Span(lo, hi), ExprKind::Cast(lhs, dt)),
+
     Sum
 };
 
 Sum = Binary<SumKind, Factor>;
+
 SumKind: BinOpKind = {
     "+" => BinOpKind::Add,
     "-" => BinOpKind::Sub
 };
 
 Factor = Binary<FactorKind, Unary>;
+
 FactorKind: BinOpKind = {
     "*" => BinOpKind::Mul,
     "/" => BinOpKind::Div,
@@ -123,8 +126,9 @@ FactorKind: BinOpKind = {
 };
 
 Unary = {
-    <lo:@L> <o:UnaryKind> <rhs:Box<Unary>> <hi:@R>
-        => Expr::unchecked(Span(lo, hi), ExprKind::Unary(o, rhs)),
+    <lo:@L> <o:UnaryKind> <rhs:Box<Unary>> <hi:@R> =>
+        Expr::unchecked(Span(lo, hi), ExprKind::Unary(o, rhs)),
+
     PostfixExpr
 };
 
@@ -137,74 +141,88 @@ UnaryKind: UnOpKind = {
 };
 
 PostfixExpr: Expr = {
-    <lo:@L> <lhs:Box<PostfixExpr>> "(" <params:OptList<Expr>> ")" <hi:@R>
-        => Expr::unchecked(Span(lo, hi), ExprKind::Call(lhs, params)),
-    <lo:@L> <lhs:Box<PostfixExpr>> "[" <rhs:Box<Expr>> "]" <hi:@R>
-        => Expr::unchecked(Span(lo, hi), ExprKind::Subscript(lhs, rhs)),
+    <lo:@L> <lhs:Box<PostfixExpr>> "(" <params:OptList<Expr>> ")" <hi:@R> =>
+        Expr::unchecked(Span(lo, hi), ExprKind::Call(lhs, params)),
+
+    <lo:@L> <lhs:Box<PostfixExpr>> "[" <rhs:Box<Expr>> "]" <hi:@R> =>
+        Expr::unchecked(Span(lo, hi), ExprKind::Subscript(lhs, rhs)),
+
     Atom
 };
 
 Atom: Expr = {
-    <lo:@L> <l:Literal> <hi:@R> => Expr::unchecked(Span(lo, hi), ExprKind::Literal(l)),
-    "(" <Expr> ")",
-    <lo:@L> <i:Ident> <hi:@R> => Expr::unchecked(Span(lo, hi), ExprKind::Name(i))
+    <lo:@L> <l:Literal> <hi:@R> =>
+        Expr::unchecked(Span(lo, hi), ExprKind::Literal(l)),
+
+    <lo:@L> <i:Ident> <hi:@R> =>
+        Expr::unchecked(Span(lo, hi), ExprKind::Name(i)),
+
+    "(" <Expr> ")"
 };
 
 Literal: Literal = {
-    Integer => Literal::Integer(<>)
+    Integer =>
+        Literal::Integer(<>)
 };
 
-ReturnTy: Ty = <lo:@L> <ty:("->" <Ty>)?> <hi:@R>
-    => ty.unwrap_or(Ty::new(Span(lo, hi), TyKind::Void));
+ReturnTy: Ty = <lo:@L> <ty:("->" <Ty>)?> <hi:@R> =>
+    ty.unwrap_or(Ty::new(Span(lo, hi), TyKind::Void));
 
 Ty: Ty = {
-    <lo:@L> "func" "(" <params:OptList<Ty>> ")" <rty:ReturnTy> <hi:@R>
-        => {
-            let sig = Box::new(FuncTy::new(params, rty));
-            Ty::new(Span(lo, hi), TyKind::Func(sig))
-        },
+    <lo:@L> "func" "(" <params:OptList<Ty>> ")" <rty:ReturnTy> <hi:@R> => {
+        let ty = Box::new(FuncTy::new(params, rty));
+        Ty::new(Span(lo, hi), TyKind::Func(ty))
+    },
     PtrTy
 };
 
 PtrTy: Ty = {
-    <lo:@L> <ptr:Box<PtrTy>> <hi:@R> "*" => Ty::new(Span(lo, hi), TyKind::Ptr(ptr)),
+    <lo:@L> <ptr:Box<PtrTy>> <hi:@R> "*" =>
+        Ty::new(Span(lo, hi), TyKind::Ptr(ptr)),
+
     AtomTy
 };
 
 AtomTy: Ty = {
-    <lo:@L> "u8" <hi:@L> => Ty::new(Span(lo, hi), TyKind::U8),
-    <lo:@L> "void" <hi:@R> => Ty::new(Span(lo, hi), TyKind::Void),
-    <lo:@L> <i:Ident> <hi:@R> => Ty::new(Span(lo, hi), TyKind::Alias(i)),
-    <lo:@L> "(" <ptr:Box<Ty>> ")" <hi:@R> => Ty::new(Span(lo, hi), TyKind::Paren(ptr)),
+    <lo:@L> "u8" <hi:@L> =>
+        Ty::new(Span(lo, hi), TyKind::U8),
+
+    <lo:@L> "void" <hi:@R> =>
+        Ty::new(Span(lo, hi), TyKind::Void),
+
+    <lo:@L> <i:Ident> <hi:@R> =>
+        Ty::new(Span(lo, hi), TyKind::Alias(i)),
+
+    <lo:@L> "(" <ptr:Box<Ty>> ")" <hi:@R> =>
+        Ty::new(Span(lo, hi), TyKind::Paren(ptr)),
+
     StructTy
 };
 
-StructTy: Ty = <lo:@L> "struct" "{" <strukt:StructKind> "}" <hi:@R>
-    => {
-        Ty::new(Span(lo, hi), strukt)
-    };
+StructTy: Ty = <lo:@L> "struct" "{" <strukt:StructKind> "}" <hi:@R> =>
+    Ty::new(Span(lo, hi), strukt);
 
-StructKind: TyKind = (<FieldList> ";")+
-    => {
-        let fields = <>.into_iter()
-            .flat_map(|fields| fields.into_iter())
-            .collect();
+StructKind: TyKind = (<FieldList> ";")+ => {
+    let fields = <>.into_iter()
+        .flat_map(|fields| fields.into_iter())
+        .collect();
 
-        TyKind::Struct(Box::new(StructTy::new(fields)))
-    };
+    TyKind::Struct(Box::new(StructTy::new(fields)))
+};
 
-Integer: i64 = "INTEGER"
-    => match <> {
+Integer: i64 = "INTEGER" => {
+    match <> {
         token::Token::Integer(s) => s.parse::<i64>().unwrap(),
         _ => unreachable!()
-    };
+    }
+};
 
-Ident: String = "IDENT"
-    => match <> {
+Ident: String = "IDENT" => {
+    match <> {
         token::Token::Ident(s) => s,
         _ => unreachable!()
-    };
-
+    }
+};
 
 extern {
     type Location = span::Location;
