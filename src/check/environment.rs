@@ -6,18 +6,16 @@ use ast::ty::{Ty, TyKind, Field, FuncTy};
 use ast::Name;
 use parser::Span;
 
-type Struct = (Span, Vec<Field<Checked>>);
-
 pub struct Frame {
     bindings: HashMap<Name, Ty<Checked>>,
-    aliases: HashMap<Name, Struct>,
+    types: HashMap<Name, Ty<Checked>>,
 }
 
 impl Frame {
     pub fn new() -> Self {
         Frame {
             bindings: HashMap::new(),
-            aliases: HashMap::new(),
+            types: HashMap::new(),
         }
     }
 }
@@ -49,13 +47,13 @@ impl<'s> Environment<'s> {
             })
     }
 
-    pub fn declare_struct(&mut self, alias: Name, target: Struct) -> CheckResult<()> {
-        let span = target.0.clone();
+    pub fn declare_ty(&mut self, alias: Name, ty: Ty<Checked>) -> CheckResult<()> {
+        let span = ty.span.clone();
 
-        self.scope.aliases
-            .insert(alias.clone(), target)
+        self.scope.types
+            .insert(alias.clone(), ty)
             .map_or(Ok(()), |ref existing| {
-                Err(SE::new(span, SEK::Redefinition(existing.0.clone(), alias)))
+                Err(SE::new(span, SEK::Redefinition(existing.span.clone(), alias)))
             })
     }
 
@@ -63,9 +61,7 @@ impl<'s> Environment<'s> {
         self.scope.find(|frame| frame.bindings.get(name))
     }
 
-    pub fn get_struct(&self, name: &Name) -> Option<&Vec<Field<Checked>>> {
-        self.scope
-            .find(|frame| frame.aliases.get(name))
-            .map(|&(_, ref fields)| fields)
+    pub fn get_ty(&self, name: &Name) -> Option<&Ty<Checked>> {
+        self.scope.find(|frame| frame.types.get(name))
     }
 }

@@ -28,6 +28,7 @@ pub enum Token {
     Return,
     Func,
     Struct,
+    Type,
     As,
 
     U8,
@@ -68,6 +69,7 @@ impl fmt::Display for Token {
             Token::Return => write!(f, "return"),
             Token::Func => write!(f, "func"),
             Token::Struct => write!(f, "struct"),
+            Token::Type => write!(f, "type"),
             Token::As => write!(f, "as"),
             Token::U8 => write!(f, "u8"),
             Token::Void => write!(f, "void"),

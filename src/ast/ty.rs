@@ -62,7 +62,8 @@ where C: CheckType {
             TyKind::Void => write!(f, "void"),
             TyKind::Alias(ref name) => write!(f, "{}", name),
             TyKind::Ptr(ref pointee) => write!(f, "{}*", pointee),
-            TyKind::Func(ref func) => write!(f, "{}", func),
+            TyKind::Func(ref func) => func.fmt(f),
+            TyKind::Struct(ref strukt) => strukt.fmt(f),
             TyKind::Paren(ref inner) => write!(f, "({})", inner),
         }
     }
@@ -76,6 +77,7 @@ where C: CheckType {
     Alias(Name),
     Ptr(Box<Ty<C>>),
     Func(Box<FuncTy<C>>),
+    Struct(Box<StructTy<C>>),
     Paren(Box<Ty<C>>) // for pretty-printing
 }
 
@@ -112,8 +114,8 @@ where C: CheckType {
 
 impl<C> FuncTy<C>
 where C: CheckType {
-    pub fn new(params: Vec<Ty<C>>, return_ty: Ty<C>) -> Self {
-        Self {
+    pub fn new(params: Vec<Ty<C>>, return_ty: Ty<C>) -> FuncTy<C> {
+        FuncTy {
             params,
             return_ty
         }
@@ -126,5 +128,29 @@ where C: CheckType {
         write!(f, "func(")?;
         utility::write_comma_seperated(f, self.params.iter())?;
         write!(f, ") -> {}", self.return_ty)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructTy<C = Unchecked>
+where C: CheckType {
+    pub fields: Vec<Field<C>>
+}
+
+impl<C> StructTy<C>
+where C: CheckType {
+    pub fn new(fields: Vec<Field<C>>) -> StructTy<C> {
+        StructTy {
+            fields
+        }
+    }
+}
+
+impl<C> fmt::Display for StructTy<C>
+where C: CheckType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "struct {{")?;
+        utility::write_comma_seperated(f, self.fields.iter())?;
+        write!(f, "}}")
     }
 }

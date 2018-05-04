@@ -17,6 +17,7 @@ lazy_static! {
         m.entry("func", Token::Func);
         m.entry("return", Token::Return);
         m.entry("struct", Token::Struct);
+        m.entry("type", Token::Type);
         m.entry("as", Token::As);
         m.entry("u8", Token::U8);
         m.entry("void", Token::Void);

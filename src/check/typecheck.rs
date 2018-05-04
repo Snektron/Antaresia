@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use utility::{JoinExt, TestExt};
 use check::{Checked, CheckResult, SemanticError as SE, SemanticErrorKind as SEK};
 use check::environment::Environment;
-use ast::ty::{Ty, TyKind, Field, FuncTy};
+use ast::ty::{Ty, TyKind, Field, FuncTy, StructTy};
 use ast::{Name, Program};
 use ast::{Stmt, Stmts, StmtKind};
 use ast::{Expr, ExprKind, BinOpKind, UnOpKind};
@@ -48,12 +48,11 @@ impl<'e> Checker<'e> {
                     let ty = self.enter()
                         .check_func_ty(decl.ty())
                         .map(|sig| Ty::new(stmt.span.clone(), TyKind::Func(Box::new(sig))));
-                    // close scope
                     ty.and_then(|ty| self.env.declare_binding(decl.name.clone(), ty))?;
                 },
-                StmtKind::StructDecl(ref name, ref fields) => {
-                    self.check_fields(fields.to_vec())
-                        .and_then(|fields| self.env.declare_struct(name.clone(), (stmt.span.clone(), fields)))?;
+                StmtKind::TypeDecl(ref name, ref ty) => {
+                    self.check_ty(*ty.clone())
+                        .and_then(|ty| self.env.declare_ty(name.clone(), ty))?;
                 },
                 _ => {}
             }
@@ -175,11 +174,11 @@ impl<'e> Checker<'e> {
         let span = unchecked.span;
 
         let kind = match unchecked.kind {
-            TyKind::U8 => Ok(TyKind::U8),  // TODO: Builtin type variant
+            TyKind::U8 => Ok(TyKind::U8),  // TODO: Builtin/integral type variant?
             TyKind::Void => Ok(TyKind::Void),
             TyKind::Alias(name) => {
                 self.env
-                    .get_struct(&name)
+                    .get_ty(&name)
                     .map(|_| TyKind::Alias(name.clone()))
                     .ok_or(SE::new(span.clone(), SEK::Undefined(name)))
             },
@@ -190,6 +189,12 @@ impl<'e> Checker<'e> {
             TyKind::Func(func) => {
                 self.check_func_ty(*func)
                     .map(|func| TyKind::Func(Box::new(func)))
+            },
+            TyKind::Struct(strukt) => {
+                let fields = self
+                    .enter()
+                    .check_fields(strukt.fields)?;
+                Ok(TyKind::Struct(Box::new(StructTy::new(fields))))
             },
             TyKind::Paren(inner) => {
                 self.check_ty(*inner)

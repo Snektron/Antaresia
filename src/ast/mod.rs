@@ -6,7 +6,7 @@ pub use self::expr::{Expr, ExprKind, Literal, BinOpKind, UnOpKind};
 
 use check::{CheckType, Unchecked};
 use parser::Span;
-use ast::ty::{Ty, Field, FuncTy};
+use ast::ty::{Ty, Field, FuncTy, StructTy};
 
 pub type Name = String;
 
@@ -44,7 +44,7 @@ where C: CheckType {
     pub fn is_global_legal(&self) -> bool {
         match self.kind {
             StmtKind::FuncDecl(..) => true,
-            StmtKind::StructDecl(..) => true,
+            StmtKind::TypeDecl(..) => true,
             StmtKind::Expr(ref expr) => expr.is_global_legal(),
             _ => false
         }
@@ -61,7 +61,7 @@ where C: CheckType {
     Return(Box<Expr<C>>),
     Expr(Box<Expr<C>>),
     FuncDecl(Box<FuncDecl>),
-    StructDecl(Name, Vec<Field<C>>)
+    TypeDecl(Name, Box<Ty<C>>)
 }
 
 pub struct FuncDecl<C = Unchecked>

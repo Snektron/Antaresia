@@ -109,12 +109,8 @@ where C: CheckType {
 
                 decl.body.print(p);
             },
-            StmtKind::StructDecl(ref name, ref fields) => {
-                p.node(fields.len(), format!("StructDecl({})", name));
-
-                for field in fields {
-                    p.leaf(format!("Member({})", field));
-                }
+            StmtKind::TypeDecl(ref name, ref ty) => {
+                p.node(0, format!("TypeDecl({} = {})", name, ty));
             }
         }   
     }
