@@ -1,10 +1,10 @@
 use std::marker::PhantomData;
+use std::cmp::PartialEq;
 use std::fmt;
 use ast::Name;
 use check::{CheckType, Unchecked};
-use utility;
 use parser::Span;
-use std::cmp::PartialEq;
+use utility;
 
 #[derive(Debug, Clone)]
 pub struct Ty<C = Unchecked>
@@ -45,6 +45,26 @@ where C: CheckType {
             _ => false
         }
     }
+
+    pub fn has_known_finite_size(&self) -> bool {
+        match self.kind {
+            TyKind::Void => true,
+            TyKind::U8 => true,
+            TyKind::Alias(_) => false,
+            TyKind::Ptr(_) => true,
+            TyKind::Func(_) => true,
+            TyKind::Struct(ref strukt) => {
+                for field in strukt.fields.iter() {
+                    if !field.ty.has_known_finite_size() {
+                        return false
+                    }
+                }
+
+                true
+            },
+            TyKind::Paren(ref inner) => inner.has_known_finite_size()
+        }
+    }
 }
 
 impl<C> PartialEq for Ty<C>
@@ -81,20 +101,29 @@ where C: CheckType {
     Paren(Box<Ty<C>>) // for pretty-printing
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Field<C = Unchecked>
 where C: CheckType {
+    pub span: Span,
     pub name: Name,
     pub ty: Ty<C>
 }
 
 impl<C> Field<C>
 where C: CheckType {
-    pub fn new(name: Name, ty: Ty<C>) -> Self {
+    pub fn new(span: Span, name: Name, ty: Ty<C>) -> Self {
         Field {
+            span,
             name,
             ty
         }
+    }
+}
+
+impl<C> PartialEq for Field<C>
+where C: CheckType {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.ty == other.ty
     }
 }
 

@@ -1,108 +1,67 @@
-pub mod typecheck;
-pub mod environment;
-
 use std::error::Error;
+use std::hash::Hash;
 use std::fmt;
-use ast::{Name, BinOpKind, UnOpKind};
+use std::rc::Rc;
+use check::scope::Scope;
 use ast::ty::Ty;
 use parser::Span;
 
-pub type CheckResult<T> = Result<T, SemanticError>;
-
-pub trait CheckType: Clone + PartialEq {
-    type ExprInfo;
+macro_rules! fmt_err {
+    ($span:expr, $($arg:tt)*) => {
+        ::check::SemanticError {
+            span: $span,
+            message: format!($($arg)*)
+        }
+    }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+macro_rules! err {
+    ($span:expr, $($arg:tt)*) => {
+        Err(fmt_err!($span, $($arg)*))
+    }
+}
+
+pub mod typecheck;
+pub mod environment;
+pub mod scope;
+
+pub trait CheckType: Clone + PartialEq + Eq + Hash {
+    type ExprInfo: Clone;
+    type TypeInfo: Clone;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Checked;
 
 impl CheckType for Checked {
     type ExprInfo = Ty<Checked>;
+    type TypeInfo = Rc<Scope>;
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Unchecked;
 
 impl CheckType for Unchecked {
     type ExprInfo = ();
+    type TypeInfo = ();
 }
 
 #[derive(Debug)]
 pub struct SemanticError {
     span: Span,
-    kind: SemanticErrorKind
-}
-
-impl SemanticError {
-    pub fn new(span: Span, kind: SemanticErrorKind) -> Self {
-        SemanticError {
-            span,
-            kind
-        }
-    }
+    message: String
 }
 
 impl Error for SemanticError {
-    fn description(&self) -> &'static str {
-        match self.kind {
-            SemanticErrorKind::Redefinition(..) => "redefinition",
-            SemanticErrorKind::Undefined(..) => "undefined",
-            SemanticErrorKind::IllegalStatement => "illegal statement",
-            SemanticErrorKind::TypeError(..) => "type error",
-            SemanticErrorKind::InvalidBinary(..) => "invalid operands for binary operator",
-            SemanticErrorKind::InvalidUnary(..) => "invalid operands for unary operator",
-            SemanticErrorKind::NotAFunction(..) => "callee is not a function",
-            SemanticErrorKind::FieldDeclaredVoid(..) => "field declared void",
-            SemanticErrorKind::ParameterDeclaredVoid => "parameter declared void"
-        }
+    fn description(&self) -> &str {
+        self.message.as_str()
     }
-}
-
-#[derive(Debug)]
-pub enum SemanticErrorKind {
-    Redefinition(Span, Name),
-    Undefined(Name),
-    IllegalStatement,
-    TypeError(Ty<Checked>, Ty<Checked>),
-    InvalidBinary(BinOpKind, Ty<Checked>, Ty<Checked>),
-    InvalidUnary(UnOpKind, Ty<Checked>),
-    NotAFunction(Ty<Checked>),
-    FieldDeclaredVoid(Name),
-    ParameterDeclaredVoid
 }
 
 impl fmt::Display for SemanticError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}: ", self.span.0)?;
-        match self.kind {
-            SemanticErrorKind::Redefinition(ref origin, ref name) => {
-                write!(f, "Redefinition: '{}' is already defined at {}", name, origin.0)
-            },
-            SemanticErrorKind::Undefined(ref name) => {
-                write!(f, "Undefined variable or type '{}'", name)
-            },
-            SemanticErrorKind::IllegalStatement => {
-                write!(f, "Illegal statement: statement is not allowed here")
-            },
-            SemanticErrorKind::TypeError(ref expected, ref actual) => {
-                write!(f, "Type error: expected '{}', found '{}'", expected, actual)
-            },
-            SemanticErrorKind::InvalidBinary(ref op, ref lhs, ref rhs) => {
-                write!(f, "Invalid arguments '{}' and '{}' to binary operator {}", lhs, rhs, op)
-            },
-            SemanticErrorKind::InvalidUnary(ref op, ref lhs) => {
-                write!(f, "Invalid argument '{}' to unary operator {}", lhs, op)
-            },
-            SemanticErrorKind::NotAFunction(ref actual) => {
-                write!(f, "Type error: expected function, found '{}'", actual)
-            },
-            SemanticErrorKind::FieldDeclaredVoid(ref field) => {
-                write!(f, "Field '{}' cannot have type void", field)
-            }
-            SemanticErrorKind::ParameterDeclaredVoid => {
-                write!(f, "Parameter cannot have type void")
-            }
-        }
+        write!(f, "{}: Error: {}", self.span, self.message)
     }
 }
 
+pub type CheckResult<T> = Result<T, SemanticError>;

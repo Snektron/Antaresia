@@ -4,10 +4,10 @@ extern crate phf_builder;
 #[macro_use]
 extern crate lazy_static;
 
-mod ast;
-mod parser;
-mod check;
-mod utility;
+pub mod ast;
+pub mod parser;
+pub mod check;
+pub mod utility;
 
 use std::str::from_utf8;
 use parser::Parser;

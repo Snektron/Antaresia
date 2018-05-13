@@ -1,27 +1,17 @@
-use std::collections::HashMap;
+use std::default::Default;
 use utility::{JoinExt, TestExt};
-use check::{Checked, CheckResult, SemanticError as SE, SemanticErrorKind as SEK};
-use check::environment::Environment;
+use check::{Checked, CheckResult};
+use check::environment::{Environment, Binding};
+use ast::{Name, Program, Stmt, Stmts, StmtKind, FuncDecl, TypeDecl};
+use ast::expr::{Expr, ExprKind, BinOpKind, UnOpKind, Literal};
 use ast::ty::{Ty, TyKind, Field, FuncTy, StructTy};
-use ast::{Name, Program};
-use ast::{Stmt, Stmts, StmtKind};
-use ast::{Expr, ExprKind, BinOpKind, UnOpKind};
 use parser::Span;
 
-type Struct = (Span, Vec<Field<Checked>>);
+type StmtResult = CheckResult<StmtKind<Checked>>;
+type ExprResult = CheckResult<(Ty<Checked>, ExprKind<Checked>)>;
 
-pub struct Frame {
-    bindings: HashMap<Name, Ty<Checked>>,
-    aliases: HashMap<Name, Struct>,
-}
-
-impl Frame {
-    pub fn new() -> Self {
-        Frame {
-            bindings: HashMap::new(),
-            aliases: HashMap::new(),
-        }
-    }
+lazy_static! {
+    static ref BOOL: Ty<Checked> = Ty::new(Default::default(), TyKind::U8);
 }
 
 pub struct Checker<'e> {
@@ -41,18 +31,45 @@ impl<'e> Checker<'e> {
         }
     }
 
+    pub fn forward_declare_types(&mut self, unchecked: &Stmts) -> CheckResult<()> {
+        unchecked
+            .iter()
+            .filter_map(|stmt| match stmt.kind {
+                StmtKind::TypeDecl(ref decl) => Some(decl),
+                _ => None
+            })
+            .for_each(|decl| {
+                
+            });
+
+        Ok(())
+    }
+
     pub fn forward_declare(&mut self, unchecked: &Stmts) -> CheckResult<()> {
         for stmt in unchecked {
             match stmt.kind {
                 StmtKind::FuncDecl(ref decl) => {
-                    let ty = self.enter()
-                        .check_func_ty(decl.ty())
-                        .map(|sig| Ty::new(stmt.span.clone(), TyKind::Func(Box::new(sig))));
-                    ty.and_then(|ty| self.env.declare_binding(decl.name.clone(), ty))?;
+                    let ty = self.check_func_ty(decl.ty())?;
+                    let ty = Ty::new(stmt.span.clone(), TyKind::Func(Box::new(ty)));
+
+                    let binding = Binding {
+                        span: stmt.span.clone(),
+                        name: decl.name.clone(),
+                        ty: ty
+                    };
+
+                    self.env.declare_binding(binding)?;
                 },
-                StmtKind::TypeDecl(ref name, ref ty) => {
-                    self.check_ty(*ty.clone())
-                        .and_then(|ty| self.env.declare_ty(name.clone(), ty))?;
+                StmtKind::TypeDecl(ref decl) => {
+                    let ty = self.check_ty(decl.ty.clone())?;
+
+                    let binding = Binding {
+                        span: stmt.span.clone(),
+                        name: decl.name.clone(),
+                        ty: ty
+                    };
+
+                    self.env.declare_alias(binding)?;
                 },
                 _ => {}
             }
@@ -61,8 +78,12 @@ impl<'e> Checker<'e> {
         Ok(())
     }
 
-    pub fn implicit_convert(&mut self, actual: Expr<Checked>, expected: &Ty<Checked>) -> CheckResult<Expr<Checked>> {
-        unimplemented!()
+    pub fn implicit_convert(&self, actual: Expr<Checked>, expected: &Ty<Checked>) -> CheckResult<Expr<Checked>> {
+        if &actual.info == expected {
+            return Ok(actual)
+        }
+
+        err!(actual.span, "Cannot convert from type '{}' to '{}'", actual.info, expected)
     }
 
     pub fn check_program(&mut self, unchecked: Program) -> CheckResult<Program<Checked>> {
@@ -74,7 +95,7 @@ impl<'e> Checker<'e> {
                 if stmt.is_global_legal() {
                     self.check_stmt(stmt)
                 } else {
-                    Err(SE::new(stmt.span, SEK::IllegalStatement))
+                    err!(stmt.span, "Illegal statement")
                 }
             })
             .collect::<CheckResult<_>>()?;
@@ -83,7 +104,20 @@ impl<'e> Checker<'e> {
     }
 
     pub fn check_stmt(&mut self, unchecked: Stmt) -> CheckResult<Stmt<Checked>> {
-        unimplemented!()
+        let span = unchecked.span;
+
+        let checked = match unchecked.kind {
+            StmtKind::Compound(stmts) => self.check_compound(stmts),
+            StmtKind::If(cond, csq, None) => self.check_if(*cond, *csq),
+            StmtKind::If(cond, csq, Some(alt)) => self.check_if_else(*cond, *csq, *alt),
+            StmtKind::While(cond, body) => self.check_while(*cond, *body),
+            StmtKind::Return(..) => unimplemented!(),
+            StmtKind::Expr(expr) => self.check_expr_stmt(*expr),
+            StmtKind::FuncDecl(func) => self.check_func_decl(*func),
+            StmtKind::TypeDecl(decl) => self.check_type_decl(*decl)
+        };
+
+        checked.map(|kind| Stmt::new(span, kind))
     }
 
     pub fn check_stmts(&mut self, unchecked: Stmts) -> CheckResult<Stmts<Checked>> {
@@ -95,41 +129,77 @@ impl<'e> Checker<'e> {
             .collect()
     }
     
+    fn check_compound(&mut self, stmts: Stmts) -> StmtResult {
+        self.enter()
+            .check_stmts(stmts)
+            .map(|stmts| StmtKind::Compound(stmts))
+    }
+
+    fn check_if(&mut self, cond: Expr, csq: Stmt) -> StmtResult {
+        let cond = self.check_expr(cond)?;
+        let cond = self.implicit_convert(cond, &BOOL)?;
+
+        let csq = self.enter().check_stmt(csq)?;
+
+        Ok(StmtKind::If(Box::new(cond), Box::new(csq), None))
+    }
+
+    fn check_if_else(&mut self, cond: Expr, csq: Stmt, alt: Stmt) -> StmtResult {
+        let cond = self.check_expr(cond)?;
+        let cond = self.implicit_convert(cond, &BOOL)?;
+
+        let csq = self.enter().check_stmt(csq)?;
+        let alt = self.enter().check_stmt(alt)?;
+
+        Ok(StmtKind::If(Box::new(cond), Box::new(csq), Some(Box::new(alt))))
+    }
+
+    fn check_while(&mut self, cond: Expr, body: Stmt) -> StmtResult {
+        let cond = self.check_expr(cond)?;
+        let cond = self.implicit_convert(cond, &BOOL)?;
+
+        let body = self.enter().check_stmt(body)?;
+
+        Ok(StmtKind::While(Box::new(cond), Box::new(body)))
+    }
+
+    fn check_expr_stmt(&mut self, expr: Expr) -> StmtResult {
+        self.check_expr(expr)
+            .map(|expr| StmtKind::Expr(Box::new(expr)))
+    }
+
+    fn check_func_decl(&mut self, decl: FuncDecl) -> StmtResult {
+        // function signature already forward declared.
+        let mut checker = self.enter();
+        let params = checker.check_fields(decl.params)?;
+        let return_ty = checker.check_ty(decl.return_ty)?;
+        let body = checker.enter().check_stmt(decl.body)?;
+
+        let decl = FuncDecl::new(decl.name, params, return_ty, body);
+        Ok(StmtKind::FuncDecl(Box::new(decl)))
+    }
+
+    fn check_type_decl(&mut self, decl: TypeDecl) -> StmtResult {
+        // type itself already forward declared.
+        let name = decl.name;
+        let ty = decl.ty;
+
+        self.check_ty(ty)
+            .map(|ty| StmtKind::TypeDecl(Box::new(TypeDecl::new(name, ty))))
+    }
+
     pub fn check_expr(&mut self, unchecked: Expr) -> CheckResult<Expr<Checked>> {
         let span = unchecked.span;
+
         let checked = match unchecked.kind {
-            ExprKind::Binary(op, lhs, rhs) => {
-                let lhs = self.check_expr(*lhs)?;
-                let rhs = self.check_expr(*rhs)?;
-
-                Err(SE::new(span.clone(), SEK::IllegalStatement))
-            },
+            ExprKind::Binary(op, lhs, rhs) => self.check_binary(span.clone(), op, *lhs, *rhs),
+            ExprKind::Unary(op, arg) => self.check_unary(span.clone(), op, *arg),
             ExprKind::Call(callee, args) => self.check_call(*callee, args),
-            ExprKind::Literal(lit) => Ok((lit.ty(), ExprKind::Literal(lit))),
-            ExprKind::Name(name) => {
-                self.env
-                    .get_binding(&name)
-                    .cloned()
-                    .ok_or(SE::new(span.clone(), SEK::Undefined(name.clone())))
-                    .join(Ok(ExprKind::Name(name)))
-            },
-            ExprKind::Decl(field, Some(expr)) => {
-                let field = self.check_field(field)?;
-                let expr = self
-                    .check_expr(*expr)
-                    .and_then(|e| self.expect_expr(e, &field.ty))?;
-
-                let kind = ExprKind::Decl(field, Some(Box::new(expr)));
-                Ok((Ty::void(span.clone()), kind))
-            },
-            ExprKind::Decl(field, None) => {
-                self.check_field(field)
-                    .map(|field| ExprKind::Decl(field, None))
-                    .map(|kind| (Ty::void(span.clone()), kind))
-            },
-            _ => {
-                unimplemented!()
-            }
+            ExprKind::Cast(..) => unimplemented!(),
+            ExprKind::ImplicitCast(..) => unimplemented!(),
+            ExprKind::Literal(lit) => self.check_literal(span.clone(), lit),
+            ExprKind::Name(name) => self.check_name(span.clone(), name),
+            ExprKind::Decl(field, default) => self.check_decl(span.clone(), field, default)
         };
 
         checked.map(|(result_ty, kind)| Expr::new(span, kind, result_ty))
@@ -142,7 +212,15 @@ impl<'e> Checker<'e> {
             .collect()
     }
 
-    pub fn check_call(&mut self, callee: Expr, args: Vec<Expr>) -> CheckResult<(Ty<Checked>, ExprKind<Checked>)> {
+    fn check_binary(&mut self, span: Span, opkind: BinOpKind, lhs: Expr, rhs: Expr) -> ExprResult {
+        unimplemented!();
+    }
+
+    fn check_unary(&mut self, span: Span, opkind: UnOpKind, arg: Expr) -> ExprResult {
+        unimplemented!();
+    }
+
+    fn check_call(&mut self, callee: Expr, args: Vec<Expr>) -> ExprResult {
         let callee = self.check_expr(callee)?;
 
         let func = if let TyKind::Func(ref func) = callee.info.kind {
@@ -152,22 +230,53 @@ impl<'e> Checker<'e> {
                 .check_exprs(args)?
                 .into_iter()
                 .zip(func.params.iter())
-                .map(|(arg, param_ty)| self.expect_expr(arg, param_ty))
+                .map(|(arg, param_ty)| self.implicit_convert(arg, param_ty))
                 .collect::<CheckResult<_>>()?;
             Ok((return_ty, args))
         } else {
-            Err(SE::new(callee.span.clone(), SEK::NotAFunction(callee.info.clone())))
+            err!(callee.span.clone(), "'{}' is not a function", callee.info)
         };
 
         func.map(|(return_ty, args)| (return_ty, ExprKind::Call(Box::new(callee), args)))
     }
 
-    pub fn expect_expr(&mut self, expr: Expr<Checked>, expected: &Ty<Checked>) -> CheckResult<Expr<Checked>> {
-        if &expr.info != expected {
-            self.implicit_convert(expr, expected)
+    fn check_literal(&self, span: Span, lit: Literal) -> ExprResult {
+        let ty = match &lit {
+            Literal::Integer(_) => Ty::new(span, TyKind::U8)
+        };
+
+        Ok((ty, ExprKind::Literal(lit)))
+    }
+
+    fn check_name(&self, span: Span, name: Name) -> ExprResult {
+        self.env
+            .binding(&name)
+            .map(|binding| &binding.ty)
+            .cloned()
+            .ok_or(fmt_err!(span.clone(), "Undefined variable '{}'", name))
+            .join(Ok(ExprKind::Name(name)))
+    }
+
+    fn check_decl(&mut self, span: Span, field: Field, default: Option<Box<Expr>>) -> ExprResult {
+        let field = self.check_field(field)?;
+
+        let expr = match default {
+            None => Ok(None),
+            Some(expr) => {
+                self.check_expr(*expr)
+                    .and_then(|expr| self.implicit_convert(expr, &field.ty))
+                    .map(|expr| Some(Box::new(expr)))
+            }
+        }?;
+
+        let ty = if expr.is_some() {
+            field.ty.clone()
         } else {
-            Ok(expr)
-        }
+            Ty::void(span.clone())
+        };
+
+        let kind = ExprKind::Decl(field, expr);
+        Ok((ty, kind))
     }
 
     pub fn check_ty(&self, unchecked: Ty) -> CheckResult<Ty<Checked>> {
@@ -178,9 +287,9 @@ impl<'e> Checker<'e> {
             TyKind::Void => Ok(TyKind::Void),
             TyKind::Alias(name) => {
                 self.env
-                    .get_ty(&name)
+                    .alias(&name)
                     .map(|_| TyKind::Alias(name.clone()))
-                    .ok_or(SE::new(span.clone(), SEK::Undefined(name)))
+                    .ok_or(fmt_err!(span.clone(), "Undefined type '{}'", name))
             },
             TyKind::Ptr(inner) => {
                 self.check_ty(*inner)
@@ -218,7 +327,7 @@ impl<'e> Checker<'e> {
             .map(|ty| self.check_ty(ty))
             .map(|ty| {
                 ty.test_or(|ty| !ty.is_void(), |ty| {
-                    SE::new(ty.span, SEK::ParameterDeclaredVoid)
+                    fmt_err!(ty.span.clone(), "Parameter cannot have type '{}'", ty)
                 })
             })
             .collect()
@@ -231,14 +340,25 @@ impl<'e> Checker<'e> {
     }
 
     pub fn check_field(&mut self, unchecked: Field) -> CheckResult<Field<Checked>> {
+        let span = unchecked.span;
         let name = unchecked.name;
         
         self.check_ty(unchecked.ty)
             .test_or(|ty| !ty.is_void(), |ty| {
-                SE::new(ty.span, SEK::FieldDeclaredVoid(name.clone()))
+                fmt_err!(ty.span.clone(), "Field cannot have type '{}'", ty)
             })
-            .and_then(|ty| self.env.declare_binding(name.clone(), ty.clone()).and(Ok(ty)))
-            .map(|dt| Field::new(name, dt))
+            .and_then(|ty| {
+                let binding = Binding {
+                    span: span.clone(),
+                    name: name.clone(),
+                    ty: ty.clone()
+                };
+
+                self.env
+                    .declare_binding(binding)
+                    .and(Ok(ty))
+            })
+            .map(|dt| Field::new(span, name, dt))
     }
 
     pub fn check_fields(&mut self, unchecked: Vec<Field>) -> CheckResult<Vec<Field<Checked>>> {

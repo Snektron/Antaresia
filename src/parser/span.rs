@@ -1,7 +1,7 @@
 use std::default::Default;
 use std::fmt;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Location {
     line: usize,
     col: usize
@@ -38,7 +38,7 @@ pub struct Span(pub Location, pub Location);
 
 impl fmt::Display for Span {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:{}", self.0, self.1)
+        self.0.fmt(f)
     }
 }
 

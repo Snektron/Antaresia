@@ -1,4 +1,4 @@
-use std::iter::Iterator;
+use std::iter::{Iterator, IntoIterator};
 use std::default::Default;
 use std::ops::{Deref, DerefMut};
 
@@ -29,17 +29,19 @@ impl<'a, T> Scoped<'a, T> {
             .or_else(|| self.next.and_then(|next| next.find(func)))
     }
 
-    pub fn item(&self) -> &T {
-        &self.item
-    }
-
-    pub fn item_mut(&mut self) -> &mut T {
-        &mut self.item
-    }
-
     pub fn iter<'b>(&'b self) -> Iter<'b, T> {
         Iter {
             current: Some(self)
+        }
+    }
+
+    pub fn flat_map<'b, F, I>(&'b self, f: F) -> FlatMap<'b, T, F, I>
+    where F: Fn(&'b T) -> I,
+          I: IntoIterator {
+        FlatMap {
+            f,
+            scope_iter: self.iter(),
+            inner_iter: None
         }
     }
 }
@@ -80,6 +82,37 @@ where T: 'a {
             Some(&current.item)
         } else {
             None
+        }
+    }
+}
+
+pub struct FlatMap<'a, T, F, I>
+where T: 'a,
+      F: Fn(&'a T) -> I,
+      I: IntoIterator {
+    f: F,
+    scope_iter: Iter<'a, T>,
+    inner_iter: Option<I::IntoIter>
+}
+
+impl<'a, T, F, I> Iterator for FlatMap<'a, T, F, I>
+    where T: 'a,
+          F: Fn(&'a T) -> I,
+          I: IntoIterator {
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(ref mut iter) = self.inner_iter {
+                if let Some(x) = iter.next() {
+                    return Some(x)
+                }
+            }
+
+            match self.scope_iter.next().map(&self.f) {
+                None => return None,
+                next => self.inner_iter = next.map(IntoIterator::into_iter)
+            }
         }
     }
 }

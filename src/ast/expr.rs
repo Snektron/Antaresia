@@ -1,10 +1,10 @@
 use std::fmt;
-use std::default::Default;
 use ast::{Name};
-use ast::ty::{Ty, TyKind, Field};
-use check::{CheckType, Unchecked, Checked};
+use ast::ty::{Ty, Field};
+use check::{CheckType, Unchecked};
 use parser::Span;
 
+#[derive(Clone)]
 pub struct Expr<C = Unchecked>
 where C: CheckType {
     pub span: Span,
@@ -37,12 +37,12 @@ impl Expr<Unchecked> {
     }
 }
 
+#[derive(Clone)]
 pub enum ExprKind<C = Unchecked>
 where C: CheckType {
     Binary(BinOpKind, Box<Expr<C>>, Box<Expr<C>>),
     Unary(UnOpKind, Box<Expr<C>>),
     Call(Box<Expr<C>>, Vec<Expr<C>>),
-    Subscript(Box<Expr<C>>, Box<Expr<C>>),
     Cast(Box<Expr<C>>, Ty<C>),
     ImplicitCast(Box<Expr<C>>, Ty<C>),
     Literal(Literal),
@@ -50,14 +50,15 @@ where C: CheckType {
     Decl(Field<C>, Option<Box<Expr<C>>>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BinOpKind {
     Add,
     Sub,
     Mul,
     Div,
     Mod,
-    Assign
+    Assign,
+    Subscript
 }
 
 impl fmt::Display for BinOpKind {
@@ -69,11 +70,12 @@ impl fmt::Display for BinOpKind {
             BinOpKind::Div => write!(f, "/"),
             BinOpKind::Mod => write!(f, "%"),
             BinOpKind::Assign => write!(f, "="),
+            BinOpKind::Subscript => write!(f, "[]")
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum UnOpKind {
     Neg,
     Compl,
@@ -97,12 +99,4 @@ impl fmt::Display for UnOpKind {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Literal {
     Integer(i64)
-}
-
-impl Literal {
-    pub fn ty(&self) -> Ty<Checked> {
-        match *self {
-            Literal::Integer(..) => Ty::new(Default::default(), TyKind::U8)
-        }
-    }
 }

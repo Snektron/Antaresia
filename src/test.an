@@ -1,4 +1,8 @@
-func a(a: u8) -> u8 {
+func a() {
+    b();
+}
+
+func b() {
 
 }
 

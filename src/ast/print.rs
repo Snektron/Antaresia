@@ -1,6 +1,7 @@
 use std::convert::AsRef;
 use std::cmp;
-use ast::{Program, Stmt, StmtKind, Expr, ExprKind};
+use ast::{Program, Stmt, StmtKind};
+use ast::expr::{Expr, ExprKind};
 use check::CheckType;
 
 pub struct Printer {
@@ -109,8 +110,8 @@ where C: CheckType {
 
                 decl.body.print(p);
             },
-            StmtKind::TypeDecl(ref name, ref ty) => {
-                p.node(0, format!("TypeDecl({} = {})", name, ty));
+            StmtKind::TypeDecl(ref decl) => {
+                p.node(0, format!("TypeDecl({} = {})", decl.name, decl.ty));
             }
         }   
     }
@@ -136,11 +137,6 @@ where C: CheckType {
                 for arg in args {
                     arg.print(p);
                 }
-            },
-            ExprKind::Subscript(ref lhs, ref rhs) => {
-                p.node(2, "Subscript");
-                lhs.print(p);
-                rhs.print(p);
             },
             ExprKind::Cast(ref lhs, ref dt) => {
                 p.node(1, format!("Cast({})", dt));

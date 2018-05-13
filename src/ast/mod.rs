@@ -2,11 +2,11 @@ pub mod print;
 pub mod expr;
 pub mod ty;
 
-pub use self::expr::{Expr, ExprKind, Literal, BinOpKind, UnOpKind};
-
 use check::{CheckType, Unchecked};
 use parser::Span;
-use ast::ty::{Ty, Field, FuncTy, StructTy};
+use ast::ty::{Ty, Field, FuncTy};
+use ast::expr::Expr;
+
 
 pub type Name = String;
 
@@ -60,8 +60,8 @@ where C: CheckType {
     While(Box<Expr<C>>, Box<Stmt<C>>),
     Return(Box<Expr<C>>),
     Expr(Box<Expr<C>>),
-    FuncDecl(Box<FuncDecl>),
-    TypeDecl(Name, Box<Ty<C>>)
+    FuncDecl(Box<FuncDecl<C>>),
+    TypeDecl(Box<TypeDecl<C>>)
 }
 
 pub struct FuncDecl<C = Unchecked>
@@ -91,5 +91,21 @@ where C: CheckType {
             .collect();
 
         FuncTy::new(params, self.return_ty.clone())
+    }
+}
+
+pub struct TypeDecl<C = Unchecked>
+where C: CheckType {
+    pub name: Name,
+    pub ty: Ty<C>
+}
+
+impl<C> TypeDecl<C>
+where C: CheckType {
+    pub fn new(name: Name, ty: Ty<C>) -> Self {
+        TypeDecl {
+            name,
+            ty
+        }
     }
 }

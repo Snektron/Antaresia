@@ -1,14 +1,13 @@
+use std::rc::Rc;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::cmp::{PartialEq, Eq};
 use std::borrow::Borrow;
-use utility::scoped::Scoped;
 use check::{Checked, CheckResult};
-use ast::ty::Ty;
 use ast::Name;
+use ast::ty::Ty;
 use parser::Span;
 
-#[derive(Clone)]
 pub struct Binding {
     pub span: Span,
     pub name: Name,
@@ -41,63 +40,82 @@ impl Borrow<Name> for Binding {
     }
 }
 
-pub struct Frame {
+pub struct Scope {
+    parent: Option<Rc<Scope>>,
     bindings: HashSet<Binding>,
     types: HashSet<Binding>
 }
 
-impl Frame {
-    pub fn new() -> Self {
-        Frame {
+impl Scope {
+    pub fn new() -> Scope {
+        Scope {
+            parent: None,
             bindings: HashSet::new(),
-            types: HashSet::new(),
-        }
-    }
-}
-
-pub struct Environment<'s> {
-    scope: Scoped<'s, Frame>
-}
-
-impl<'s> Environment<'s> {
-    pub fn new() -> Self {
-        Self {
-            scope: Scoped::new(Frame::new())
+            types: HashSet::new()
         }
     }
 
-    pub fn enter<'a>(&'a self) -> Environment<'a> {
-        Environment {
-            scope: self.scope.enter_with(Frame::new())
+    pub fn enter(parent: Rc<Scope>) -> Scope {
+        Scope {
+            parent: Some(parent),
+            bindings: HashSet::new(),
+            types: HashSet::new()
         }
     }
 
     pub fn declare_binding(&mut self, binding: Binding) -> CheckResult<()> {
-        if let Some(existing) = self.scope.bindings.get(&binding) {
+        if let Some(existing) = self.bindings.get(&binding) {
             return err!(binding.span, "Variable '{}' is already defined at {}", binding.name, existing.span)
         }
 
-
-        self.scope.bindings.insert(binding);
+        self.bindings.insert(binding);
         Ok(())
     }
 
     pub fn binding(&self, name: &Name) -> Option<&Binding> {
-        self.scope
-            .find(|frame| frame.bindings.get(name))
+        self.search(|scope| scope.bindings.get(name))
     }
 
     pub fn declare_alias(&mut self, alias: Binding) -> CheckResult<()> {
-        if let Some(existing) = self.scope.types.get(&alias) {
+        if let Some(existing) = self.types.get(&alias) {
             return err!(alias.span, "Type '{}' is already defined at {}", alias.name, existing.span)
         }
 
-        self.scope.types.insert(alias);
+        self.types.insert(alias);
         Ok(())
     }
 
     pub fn alias(&self, name: &Name) -> Option<&Binding> {
-        self.scope
-            .find(|frame| frame.types.get(name))
+        self.search(|scope| scope.types.get(name))
+    }
+
+    pub fn iter<'a>(&'a self) -> Iter<'a> {
+        Iter {
+            scope: self
+        }
+    }
+
+    pub fn search<'a, F, R>(&'a self, func: F) -> Option<R>
+    where F: Fn(&'a Scope) -> Option<R> {
+        self.iter()
+            .filter_map(func)
+            .next()
+    }
+}
+
+pub struct Iter<'a> {
+    scope: &'a Scope
+}
+
+impl<'a> Iterator for Iter<'a> {
+    type Item = &'a Scope;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(ref parent) = self.scope.parent {
+            self.scope = &*parent;
+            Some(self.scope)
+        } else {
+            None
+        }
     }
 }
