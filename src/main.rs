@@ -13,7 +13,6 @@ use std::str::from_utf8;
 use parser::Parser;
 use parser::lexer::Lexer;
 use ast::print::Printer;
-use check::typecheck::Checker;
 
 fn main() {
     let program = from_utf8(include_bytes!("test.an")).unwrap();
@@ -25,13 +24,13 @@ fn main() {
 
     ast.print(&mut Printer::new());
 
-    let mut checker = Checker::new();
-    let ast = checker.check_program(ast);
+    // let mut checker = Checker::new();
+    // let ast = checker.check_program(ast);
 
-    println!("------");
+    // println!("------");
 
-    match ast {
-        Ok(ast) => ast.print(&mut Printer::new()),
-        Err(err) => println!("{}", err)
-    }
+    // match ast {
+    //     Ok(ast) => ast.print(&mut Printer::new()),
+    //     Err(err) => println!("{}", err)
+    // }
 }

@@ -1,121 +1,109 @@
-use std::rc::Rc;
-use std::collections::HashSet;
+use std::rc::{Rc, Weak};
 use std::hash::{Hash, Hasher};
 use std::cmp::{PartialEq, Eq};
 use std::borrow::Borrow;
-use check::{Checked, CheckResult};
+use std::collections::HashSet;
+use std::cell::RefCell;
 use ast::Name;
-use ast::ty::Ty;
 use parser::Span;
 
-pub struct Binding {
+#[derive(Hash, PartialEq, Eq)]
+pub enum SymbolKind {
+    Type(Name)
+}
+
+pub struct Symbol {
     pub span: Span,
-    pub name: Name,
-    pub ty: Ty<Checked>
+    pub kind: SymbolKind,
+    scope: Weak<RefCell<Inner>>
 }
 
-impl Hash for Binding {
+impl Symbol {
+    pub fn scope(&self) -> Scope {
+        self.scope
+            .upgrade()
+            .map(Scope::from_inner)
+            .expect("Symbol has no parent scope")
+    }
+}
+
+impl PartialEq for Symbol {
+    fn eq(&self, other: &Symbol) -> bool {
+        self.kind == other.kind
+    }
+}
+
+impl PartialEq<SymbolKind> for Symbol {
+    fn eq(&self, other: &SymbolKind) -> bool {
+        &self.kind == other
+    }
+}
+
+impl Borrow<SymbolKind> for Symbol {
+    fn borrow(&self) -> &SymbolKind {
+        &self.kind
+    }
+}
+
+impl Eq for Symbol {}
+
+impl Hash for Symbol {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
-        self.name.hash(hasher);
-    }
-}
-
-impl PartialEq for Binding {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-impl PartialEq<Name> for Binding {
-    fn eq(&self, other: &Name) -> bool {
-        &self.name == other
-    }
-}
-
-impl Eq for Binding {}
-
-impl Borrow<Name> for Binding {
-    fn borrow(&self) -> &Name {
-        &self.name
+        self.kind.hash(hasher)
     }
 }
 
 pub struct Scope {
-    parent: Option<Rc<Scope>>,
-    bindings: HashSet<Binding>,
-    types: HashSet<Binding>
+    inner: Rc<RefCell<Inner>>
+}
+
+struct Inner {
+    parent: Option<Rc<RefCell<Inner>>>,
+    symbols: HashSet<Rc<Symbol>>
+}
+
+impl Inner {
+    fn new() -> Inner {
+        Inner {
+            parent: None,
+            symbols: HashSet::new()
+        }
+    }
+
+    fn enter(parent: Rc<RefCell<Inner>>) -> Self {
+        Inner {
+            parent: Some(parent),
+            symbols: HashSet::new()
+        }
+    }
 }
 
 impl Scope {
-    pub fn new() -> Scope {
+    pub fn new() -> Self {
         Scope {
-            parent: None,
-            bindings: HashSet::new(),
-            types: HashSet::new()
+            inner: Rc::new(RefCell::new(Inner::new()))
         }
     }
 
-    pub fn enter(parent: Rc<Scope>) -> Scope {
+    fn from_inner(inner: Rc<RefCell<Inner>>) -> Self {
         Scope {
-            parent: Some(parent),
-            bindings: HashSet::new(),
-            types: HashSet::new()
+            inner
         }
     }
 
-    pub fn declare_binding(&mut self, binding: Binding) -> CheckResult<()> {
-        if let Some(existing) = self.bindings.get(&binding) {
-            return err!(binding.span, "Variable '{}' is already defined at {}", binding.name, existing.span)
-        }
-
-        self.bindings.insert(binding);
-        Ok(())
-    }
-
-    pub fn binding(&self, name: &Name) -> Option<&Binding> {
-        self.search(|scope| scope.bindings.get(name))
-    }
-
-    pub fn declare_alias(&mut self, alias: Binding) -> CheckResult<()> {
-        if let Some(existing) = self.types.get(&alias) {
-            return err!(alias.span, "Type '{}' is already defined at {}", alias.name, existing.span)
-        }
-
-        self.types.insert(alias);
-        Ok(())
-    }
-
-    pub fn alias(&self, name: &Name) -> Option<&Binding> {
-        self.search(|scope| scope.types.get(name))
-    }
-
-    pub fn iter<'a>(&'a self) -> Iter<'a> {
-        Iter {
-            scope: self
+    pub fn enter(&self) -> Scope {
+        Scope {
+            inner: Rc::new(RefCell::new(Inner::enter(self.inner.clone())))
         }
     }
 
-    pub fn search<'a, F, R>(&'a self, func: F) -> Option<R>
-    where F: Fn(&'a Scope) -> Option<R> {
-        self.iter()
-            .filter_map(func)
-            .next()
-    }
-}
+    pub fn insert(&mut self, span: Span, kind: SymbolKind) -> bool {
+        let sym = Symbol {
+            span,
+            kind,
+            scope: Rc::downgrade(&self.inner)
+        };
 
-pub struct Iter<'a> {
-    scope: &'a Scope
-}
-
-impl<'a> Iterator for Iter<'a> {
-    type Item = &'a Scope;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(ref parent) = self.scope.parent {
-            self.scope = &*parent;
-            Some(self.scope)
-        } else {
-            None
-        }
+        self.inner.borrow_mut().symbols.insert(Rc::new(sym))
     }
 }

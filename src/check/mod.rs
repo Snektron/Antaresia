@@ -1,8 +1,6 @@
 use std::error::Error;
 use std::hash::Hash;
 use std::fmt;
-use std::rc::Rc;
-use check::scope::Scope;
 use ast::ty::Ty;
 use parser::Span;
 
@@ -21,13 +19,13 @@ macro_rules! err {
     }
 }
 
-pub mod typecheck;
-pub mod environment;
-pub mod scope;
+//pub mod typecheck;
+//pub mod environment;
+//pub mod scope;
+pub mod scope_tree;
 
 pub trait CheckType: Clone + PartialEq + Eq + Hash {
     type ExprInfo: Clone;
-    type TypeInfo: Clone;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -35,7 +33,6 @@ pub struct Checked;
 
 impl CheckType for Checked {
     type ExprInfo = Ty<Checked>;
-    type TypeInfo = Rc<Scope>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -43,7 +40,6 @@ pub struct Unchecked;
 
 impl CheckType for Unchecked {
     type ExprInfo = ();
-    type TypeInfo = ();
 }
 
 #[derive(Debug)]
